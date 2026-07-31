@@ -1,0 +1,40 @@
+.form-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+.form-group{display:flex; flex-direction:column; gap:7px; margin-bottom:16px;}
+.form-group.full{grid-column:1 / -1;}
+.form-group label{font-size:12.5px; font-weight:700; color:var(--gray-700);}
+.form-group .req{color:var(--danger); font-weight:700;}
+.form-group .hint{font-size:11.5px; color:var(--gray-400);}
+.form-control{
+  height:42px; border-radius:var(--radius-sm); border:1px solid var(--gray-200); background:#fff;
+  padding:0 14px; font-size:13.5px; color:var(--gray-800); transition:all var(--dur-fast) var(--ease); width:100%;
+}
+textarea.form-control{height:auto; padding:12px 14px; min-height:90px; resize:vertical; font-family:inherit;}
+.form-control:focus{border-color:var(--color-primary-400); box-shadow:var(--shadow-focus);}
+.form-control.error{border-color:var(--danger);}
+.error-msg{font-size:11.5px; color:var(--danger); display:none; align-items:center; gap:5px;}
+.form-control.error + .error-msg{display:flex;}
+
+.input-affix{position:relative;}
+.input-affix .form-control{padding-right:42px;}
+.input-affix button{
+  position:absolute; right:6px; top:50%; transform:translateY(-50%); width:30px; height:30px; border:none;
+  background:transparent; color:var(--gray-400); cursor:pointer; border-radius:7px; display:flex; align-items:center; justify-content:center;
+}
+.input-affix button:hover{background:var(--gray-100); color:var(--gray-600);}
+
+.checkbox-row{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--gray-600); cursor:pointer;}
+.checkbox-row input{width:16px; height:16px; accent-color:var(--color-primary); cursor:pointer;}
+
+.upload-drop{
+  border:1.5px dashed var(--gray-300); border-radius:var(--radius-md); padding:26px; text-align:center;
+  color:var(--gray-500); font-size:12.5px; cursor:pointer; transition:all var(--dur-fast) var(--ease);
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+.upload-drop:hover{border-color:var(--color-primary-400); background:var(--color-primary-50);}
+.upload-drop svg{width:26px; height:26px; color:var(--color-primary);}
+
+.module-switch-list{display:flex; flex-direction:column; gap:2px;}
+.module-switch-row{display:flex; align-items:center; justify-content:space-between; padding:13px 4px; border-bottom:1px solid var(--gray-100);}
+.module-switch-row:last-child{border-bottom:none;}
+.module-switch-row .m-info strong{display:block; font-size:13.5px; color:var(--gray-800);}
+.module-switch-row .m-info span{font-size:11.5px; color:var(--gray-500);}

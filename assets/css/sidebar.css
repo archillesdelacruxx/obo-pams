@@ -1,0 +1,134 @@
+.sidebar{
+  background:var(--color-primary-900);
+  background-image:radial-gradient(circle at 0% 0%, var(--color-primary-700) 0%, var(--color-primary-900) 55%);
+  color:#dbe6fb; position:relative; height:100vh; display:flex; flex-direction:column;
+  overflow:hidden; z-index:60;
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  transition: width var(--dur-slow) var(--ease);
+}
+.sidebar-brand{
+  display:flex; align-items:center; gap:12px; padding:0 20px; height:var(--header-h); flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  overflow: hidden;
+  transition: padding var(--dur-slow) var(--ease);
+}
+.sidebar-brand .mark{
+  width:36px; height:36px; border-radius:10px; background:#fff; color:var(--color-primary-900);
+  display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:800;
+  flex-shrink:0; font-size:15px;
+}
+.sidebar-brand .name{
+  font-family:var(--font-display); font-weight:700; font-size:15px; color:#fff;
+  white-space:nowrap; overflow:hidden;
+  opacity:1; transition:opacity var(--dur-fast) var(--ease);
+}
+.sidebar-brand .name small{display:block; font-family:var(--font-body); font-weight:500; font-size:10.5px; color:#9fb6e6; letter-spacing:.03em;}
+
+.sidebar-toggle{
+  display: none;
+}
+
+.sidebar-nav{flex:1; overflow-y:auto; overflow-x:hidden; padding:16px 12px; scrollbar-width:none; -ms-overflow-style:none;}
+.sidebar-nav::-webkit-scrollbar{display:none;}
+.sidebar-section-label{
+  font-size:10.5px; text-transform:uppercase; letter-spacing:.09em; color:#7c96c9;
+  padding:14px 12px 8px; font-weight:700;
+  white-space:nowrap; overflow:hidden;
+  opacity:1; transition:opacity var(--dur-fast) var(--ease);
+}
+.nav-item{
+  display:flex; align-items:center; gap:13px; padding:11px 12px; border-radius:var(--radius-sm);
+  color:#c7d7f4; font-size:13.5px; font-weight:600; margin-bottom:3px; cursor:pointer;
+  position:relative; transition:background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+    padding var(--dur-slow) var(--ease), justify-content var(--dur-slow) var(--ease);
+  white-space:nowrap; overflow:hidden;
+  text-decoration:none;
+}
+.nav-item svg{width:19px; height:19px; flex-shrink:0;}
+.nav-item:hover{background:rgba(255,255,255,.08); color:#fff;}
+.nav-item.active{background:#fff; color:var(--color-primary-900);}
+.nav-item.active::before{
+  content:''; position:absolute; left:-12px; top:50%; transform:translateY(-50%);
+  width:4px; height:22px; background:var(--white); border-radius:0 4px 4px 0;
+}
+.nav-item .label{
+  flex:1; min-width:0; overflow:hidden;
+  opacity:1; transition:opacity var(--dur-fast) var(--ease), max-width var(--dur-slow) var(--ease);
+  max-width:180px;
+}
+.nav-item .count{
+  margin-left:auto; background:rgba(255,255,255,.14); color:#fff; font-size:11px; font-weight:700;
+  padding:1px 7px; border-radius:99px; flex-shrink:0;
+  opacity:1; transition:opacity var(--dur-fast) var(--ease);
+}
+.nav-item.active .count{background:var(--color-primary-100); color:var(--color-primary-700);}
+
+.sidebar-footer{
+  padding:14px 12px 18px; border-top:1px solid rgba(255,255,255,.08); flex-shrink:0;
+  overflow:hidden;
+}
+.sidebar-user{
+  display:flex; align-items:center; gap:11px; padding:9px; border-radius:var(--radius-sm); cursor:pointer;
+  transition:background var(--dur-fast) var(--ease);
+  overflow:hidden;
+}
+.sidebar-user:hover{background:rgba(255,255,255,.08);}
+.sidebar-user .info{min-width:0; opacity:1; transition:opacity var(--dur-fast) var(--ease);}
+.sidebar-user .info strong{display:block; font-size:12.5px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.sidebar-user .info span{font-size:11px; color:#8fa9db;}
+
+/* ─── COLLAPSED STATE — icon-only rail ─────────────────────────────────────── */
+.app-shell.collapsed .sidebar{width:var(--sidebar-w-collapsed);}
+.app-shell.collapsed .sidebar-brand{padding:0; justify-content:center;}
+.app-shell.collapsed .sidebar-brand .name{opacity:0; max-width:0; pointer-events:none;}
+.app-shell.collapsed .sidebar-section-label{opacity:0; pointer-events:none;}
+.app-shell.collapsed .nav-item{justify-content:center; padding:11px 0;}
+.app-shell.collapsed .nav-item .label{opacity:0; max-width:0; pointer-events:none;}
+.app-shell.collapsed .nav-item .count{opacity:0; pointer-events:none;}
+.app-shell.collapsed .nav-item.active::before{left:0;}
+.app-shell.collapsed .sidebar-user{justify-content:center;}
+.app-shell.collapsed .sidebar-user .info{opacity:0; pointer-events:none;}
+
+/* Tooltip on hover when collapsed */
+.app-shell.collapsed .nav-item{position:relative;}
+.app-shell.collapsed .nav-item::after{
+  content: attr(aria-label);
+  position: absolute;
+  left: calc(var(--sidebar-w-collapsed) + 8px);
+  top: 50%; transform: translateY(-50%);
+  background: var(--gray-900);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 200;
+  box-shadow: var(--shadow-md);
+  transition: opacity var(--dur-fast) var(--ease);
+}
+.app-shell.collapsed .nav-item:hover::after{opacity:1;}
+
+/* ─── MOBILE ─────────────────────────────────────────────────────────────────*/
+@media (max-width: 960px){
+  .sidebar{
+    position:fixed; left:0; top:0;
+    width:var(--sidebar-w) !important;
+    transform:translateX(-100%);
+    transition:transform var(--dur-slow) var(--ease);
+    box-shadow:var(--shadow-lg);
+  }
+  .app-shell{grid-template-columns:1fr !important;}
+  .app-shell.mobile-open .sidebar{transform:translateX(0);}
+  /* Always show labels on mobile */
+  .app-shell.mobile-open .sidebar-brand .name,
+  .app-shell.mobile-open .sidebar-section-label,
+  .app-shell.mobile-open .nav-item .label,
+  .app-shell.mobile-open .sidebar-user .info{opacity:1; max-width:none; pointer-events:auto;}
+  .app-shell.mobile-open .nav-item{justify-content:flex-start; padding:11px 12px;}
+  .app-shell.mobile-open .sidebar-user{justify-content:flex-start;}
+  .app-shell.mobile-open .sidebar-brand{padding:0 20px; justify-content:flex-start;}
+}

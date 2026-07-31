@@ -1,0 +1,1226 @@
+/* ==========================================================================
+   PAMS — User Module Styles
+   Styles specific to the User module pages that extend the shared design
+   system without conflicting with the admin module components.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   User Dashboard – Summary stat grid (5-card variant)
+   -------------------------------------------------------------------------- */
+.user-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   Quick Access Cards
+   -------------------------------------------------------------------------- */
+.quick-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.quick-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 22px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: transform var(--dur-base) var(--ease),
+    box-shadow var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease);
+  text-decoration: none;
+  color: inherit;
+}
+.quick-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary-100);
+}
+.quick-card .qc-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.quick-card .qc-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.quick-card .qc-body strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.quick-card .qc-body span {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+.quick-card .qc-arrow {
+  margin-left: auto;
+  color: var(--gray-300);
+  transition: transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.quick-card:hover .qc-arrow {
+  transform: translateX(4px);
+  color: var(--color-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Analytics Placeholder card
+   -------------------------------------------------------------------------- */
+.analytics-placeholder {
+  background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--gray-50) 100%);
+  border: 1.5px dashed var(--color-primary-100);
+  border-radius: var(--radius-lg);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--gray-500);
+}
+.analytics-placeholder .placeholder-icon {
+  width: 56px;
+  height: 56px;
+  background: var(--color-primary-100);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: var(--color-primary);
+}
+.analytics-placeholder .placeholder-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.analytics-placeholder h4 {
+  font-size: 15px;
+  color: var(--gray-700);
+  margin-bottom: 6px;
+}
+.analytics-placeholder p {
+  font-size: 13px;
+  color: var(--gray-400);
+}
+
+/* --------------------------------------------------------------------------
+   Two-Panel Layout (OP Encoding, Releasing)
+   -------------------------------------------------------------------------- */
+.two-panel {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.panel-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--gray-100);
+}
+.panel-head h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.panel-head .panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-body {
+  padding: 22px;
+}
+
+/* --------------------------------------------------------------------------
+   Elapsed Time / Timer Card
+   -------------------------------------------------------------------------- */
+.timer-card {
+  background: linear-gradient(135deg, var(--color-primary-900) 0%, var(--color-primary-700) 100%);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #fff;
+}
+.timer-card .timer-icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.timer-card .timer-icon svg {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+.timer-card .timer-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 4px;
+}
+.timer-card .timer-value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.timer-card .timer-status {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Records Table Panel (right side of two-panel)
+   -------------------------------------------------------------------------- */
+.records-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-wrap: wrap;
+}
+.records-toolbar .search-wrap {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* --------------------------------------------------------------------------
+   Workflow Status Badges
+   -------------------------------------------------------------------------- */
+.badge-workflow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.badge-workflow.pending {
+  background: #FF9800;
+  color: #FFFFFF;
+  font-weight: 800;
+}
+.badge-workflow.completed {
+  background: #4CAF50;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+.badge-workflow.in-progress {
+  background: #2196F3;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+.badge-workflow.in-progress::before {
+  display: none;
+}
+.badge-workflow.released {
+  background: #2196F3;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+.badge-workflow.returned {
+  background: #FF9800;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.8); }
+}
+
+/* --------------------------------------------------------------------------
+   Workflow Details — Permit Info Header
+   -------------------------------------------------------------------------- */
+.permit-info-header {
+  background: linear-gradient(135deg, var(--color-primary-900) 0%, var(--color-primary-700) 100%);
+  border-radius: var(--radius-lg);
+  padding: 22px 28px;
+  margin-bottom: 24px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+  align-items: center;
+}
+.permit-info-header .pih-field label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(255, 255, 255, 0.6);
+  display: block;
+  margin-bottom: 5px;
+}
+.permit-info-header .pih-field span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.permit-info-header .pih-field span.permit-number {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+}
+.permit-info-header .pih-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+/* --------------------------------------------------------------------------
+   Workflow Timeline Table
+   -------------------------------------------------------------------------- */
+.timeline-table-wrap {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+.timeline-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.timeline-table thead th {
+  background: var(--gray-50);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #000;
+  padding: 13px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+.timeline-table tbody tr {
+  border-bottom: 1px solid var(--gray-100);
+  transition: background var(--dur-fast) var(--ease);
+}
+.timeline-table tbody tr:last-child { border-bottom: none; }
+.timeline-table tbody tr:hover { background: var(--gray-50); }
+.timeline-table td {
+  padding: 14px 18px;
+  font-size: 13.5px;
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+.timeline-table .round-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+}
+.timeline-table .round-badge.current {
+  background: var(--color-primary);
+  color: #fff;
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+.timeline-table .tat-days {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--gray-800);
+}
+.timeline-table .remarks-cell {
+  font-size: 13px;
+  color: var(--gray-500);
+  font-style: italic;
+  max-width: 200px;
+}
+
+/* --------------------------------------------------------------------------
+   Workflow Summary Card (below timeline)
+   -------------------------------------------------------------------------- */
+.workflow-summary-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.workflow-summary-card .ws-field label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+  display: block;
+  margin-bottom: 6px;
+}
+.workflow-summary-card .ws-field span {
+  font-size: 20px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--gray-900);
+}
+.workflow-summary-card .ws-field.highlight span {
+  color: var(--color-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Notification Cards
+   -------------------------------------------------------------------------- */
+.notif-center {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.notif-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+.notif-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+.notif-card.unread {
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-primary-50);
+}
+.notif-card.unread-warning {
+  border-left: 3px solid var(--warning);
+  background: var(--warning-bg);
+}
+.notif-card.unread-success {
+  border-left: 3px solid var(--success);
+  background: var(--success-light);
+}
+.notif-card .nc-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.notif-card .nc-icon svg {
+  width: 19px;
+  height: 19px;
+}
+.notif-card .nc-content {
+  flex: 1;
+  min-width: 0;
+}
+.notif-card .nc-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.notif-card .nc-title .unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  flex-shrink: 0;
+}
+.notif-card .nc-message {
+  font-size: 12.5px;
+  color: var(--gray-600);
+  line-height: 1.5;
+}
+.notif-card .nc-time {
+  font-size: 11px;
+  color: var(--gray-400);
+  margin-top: 6px;
+  display: block;
+}
+.notif-card .nc-action {
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Announcements Cards
+   -------------------------------------------------------------------------- */
+.announcements-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+.announcement-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
+}
+.announcement-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+.announcement-card .ac-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.announcement-card .ac-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-primary);
+  background: var(--color-primary-50);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+}
+.announcement-card .ac-date {
+  font-size: 11.5px;
+  color: var(--gray-400);
+  white-space: nowrap;
+}
+.announcement-card h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.announcement-card p {
+  font-size: 13px;
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+.announcement-card .ac-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--gray-100);
+}
+.announcement-card .ac-author {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+.announcement-card .ac-author strong {
+  color: var(--gray-700);
+}
+
+/* --------------------------------------------------------------------------
+   Profile Page
+   -------------------------------------------------------------------------- */
+.profile-hero {
+  background: linear-gradient(135deg, var(--color-primary-900) 0%, var(--color-primary-700) 100%);
+  border-radius: var(--radius-lg);
+  padding: 36px 40px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-bottom: 24px;
+  color: #fff;
+}
+.profile-hero .ph-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  border: 3px solid rgba(255,255,255,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.profile-hero .avatar.lg {
+  position: relative;
+  flex-shrink: 0;
+}
+.profile-hero .cam-btn {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid #fff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.profile-hero .cam-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.profile-hero .cam-btn:active {
+  transform: scale(0.95);
+}
+.profile-hero .ph-name {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.profile-hero .ph-username {
+  font-size: 13px;
+  color: rgba(255,255,255,0.65);
+  font-family: var(--font-mono);
+  margin-bottom: 12px;
+}
+.profile-hero .ph-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.profile-hero .ph-meta-item {
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.profile-hero .ph-meta-item svg {
+  width: 13px;
+  height: 13px;
+}
+
+.module-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.module-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  border: 1px solid var(--color-primary-100);
+}
+
+.profile-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+
+/* --------------------------------------------------------------------------
+   Settings Page — User version (no system settings)
+   -------------------------------------------------------------------------- */
+.settings-section {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+.settings-section-head {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gray-100);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-section-head .ss-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.settings-section-head .ss-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.settings-section-head h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.settings-section-head p {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+.settings-section-body {
+  padding: 24px;
+}
+
+.avatar-upload {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 24px;
+}
+.avatar-upload .au-preview {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-700) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.avatar-upload .au-actions { display: flex; flex-direction: column; gap: 8px; }
+.avatar-upload .au-hint {
+  font-size: 11.5px;
+  color: var(--gray-400);
+}
+
+/* --------------------------------------------------------------------------
+   Releasing Form – Compact single-column
+   -------------------------------------------------------------------------- */
+.releasing-form-wrap {
+  max-width: 560px;
+}
+
+/* --------------------------------------------------------------------------
+   Today's Released — mini table below releasing form
+   -------------------------------------------------------------------------- */
+.mini-table-wrap {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-top: 24px;
+}
+.mini-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--gray-100);
+}
+.mini-table-head h4 {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Report Summary Cards (Approved / Releasing)
+   -------------------------------------------------------------------------- */
+.report-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   Page toolbar (tables with actions)
+   -------------------------------------------------------------------------- */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.page-toolbar .toolbar-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 380px;
+}
+.page-toolbar .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------------
+   Date range filter inputs
+   -------------------------------------------------------------------------- */
+.date-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-filter input[type="date"] {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12.5px;
+  font-family: var(--font-body);
+  color: var(--gray-700);
+  background: #fff;
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  cursor: pointer;
+}
+.date-filter input[type="date"]:focus {
+  border-color: var(--color-primary-400);
+  box-shadow: var(--shadow-focus);
+}
+.date-filter .df-sep {
+  font-size: 12px;
+  color: var(--gray-400);
+}
+
+/* --------------------------------------------------------------------------
+   Table card wrapper (shared across record pages)
+   -------------------------------------------------------------------------- */
+.table-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.table-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.table-card-head h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+.table-card-head .record-count {
+  font-size: 12px;
+  color: var(--gray-400);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   Empty State
+   -------------------------------------------------------------------------- */
+.empty-state {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--gray-400);
+}
+.empty-state .es-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: var(--gray-400);
+}
+.empty-state .es-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.empty-state h4 {
+  font-size: 15px;
+  color: var(--gray-600);
+  margin-bottom: 6px;
+}
+.empty-state p {
+  font-size: 13px;
+  color: var(--gray-400);
+}
+
+/* --------------------------------------------------------------------------
+   Pagination
+   -------------------------------------------------------------------------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-top: 1px solid var(--gray-100);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pagination .pg-info {
+  font-size: 12.5px;
+  color: var(--gray-500);
+}
+.pagination .pg-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pg-btn {
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.pg-btn:hover { border-color: var(--color-primary-400); color: var(--color-primary); }
+.pg-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.pg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* --------------------------------------------------------------------------
+   Section Card (reused from admin)
+   -------------------------------------------------------------------------- */
+.section-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--gray-100);
+}
+.section-head h3 { font-size: 14.5px; font-weight: 700; }
+.section-body { padding: 0 22px; }
+
+/* --------------------------------------------------------------------------
+   Data Table (shared standard)
+   -------------------------------------------------------------------------- */
+.data-table-wrap { overflow-x: auto; }
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+.data-table thead th {
+  background: var(--gray-50);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #000;
+  padding: 12px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+.data-table tbody tr {
+  border-bottom: 1px solid var(--gray-100);
+  transition: background var(--dur-fast) var(--ease);
+}
+.data-table tbody tr:last-child { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--gray-50); }
+.data-table td {
+  padding: 13px 16px;
+  font-size: 13.5px;
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+.data-table .cell-mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+.data-table .row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   Notif badge on sidebar
+   -------------------------------------------------------------------------- */
+.nav-item .notif-pip {
+  margin-left: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f97316;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive overrides
+   -------------------------------------------------------------------------- */
+@media (max-width: 1280px) {
+  .user-stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .quick-access-grid { grid-template-columns: repeat(2, 1fr); }
+  .permit-info-header { grid-template-columns: 1fr 1fr; }
+  .workflow-summary-card { grid-template-columns: repeat(2, 1fr); }
+  .report-stat-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 960px) {
+  .two-panel { grid-template-columns: 1fr; }
+  .announcements-grid { grid-template-columns: 1fr; }
+  .profile-details-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .user-stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .quick-access-grid { grid-template-columns: 1fr; }
+  .permit-info-header { grid-template-columns: 1fr; }
+  .workflow-summary-card { grid-template-columns: 1fr 1fr; }
+  .profile-hero { flex-direction: column; text-align: center; }
+  .profile-hero .ph-meta { justify-content: center; }
+}
+@media (max-width: 480px) {
+  .user-stat-grid { grid-template-columns: 1fr; }
+  .report-stat-grid { grid-template-columns: 1fr; }
+  .workflow-summary-card { grid-template-columns: 1fr; }
+  .page-toolbar { flex-direction: column; align-items: stretch; }
+  .page-toolbar .toolbar-right { margin-left: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Permit Workflow — fix table layout so pagination is always visible
+   -------------------------------------------------------------------------- */
+body[data-page="permit-workflow"] .page-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+body[data-page="permit-workflow"] .page-content > *:not(.table-card) {
+  flex-shrink: 0;
+}
+
+body[data-page="permit-workflow"] .table-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+body[data-page="permit-workflow"] .data-table-wrap {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+body[data-page="permit-workflow"] .pagination {
+  flex-shrink: 0;
+  border-top: 1px solid var(--gray-100);
+  background: #fff;
+}
+
+body[data-page="permit-workflow"] .page-head {
+  margin-bottom: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Order of Payment — single column, natural scroll
+   -------------------------------------------------------------------------- */
+body[data-page="order-of-payment"] .form-card .section-body {
+  padding: 0 22px 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Print — Workflow Details (print icon in Permit Workflow actions)
+   -------------------------------------------------------------------------- */
+@media print {
+  body[data-page="workflow-details"] .sidebar,
+  body[data-page="workflow-details"] .header,
+  body[data-page="workflow-details"] .breadcrumb,
+  body[data-page="workflow-details"] .page-head,
+  body[data-page="workflow-details"] .modal-wrap,
+  body[data-page="workflow-details"] #wdLoading,
+  body[data-page="workflow-details"] #wdError,
+  body[data-page="workflow-details"] #wdEmpty {
+    display: none !important;
+  }
+  body[data-page="workflow-details"] .app-shell {
+    display: block;
+    height: auto;
+    overflow: visible;
+    background: #fff;
+  }
+  body[data-page="workflow-details"] .main-col {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  body[data-page="workflow-details"] .page-content {
+    padding: 0 !important;
+    animation: none !important;
+  }
+  body[data-page="workflow-details"] #wdContent {
+    display: block !important;
+  }
+  body[data-page="workflow-details"] #wdContent .section-card {
+    display: none !important;
+  }
+  body[data-page="workflow-details"] .permit-info-header {
+    background: #fff !important;
+    border: 2px solid #000;
+    border-radius: 8px;
+    color: #000;
+    margin-bottom: 0;
+  }
+  body[data-page="workflow-details"] .permit-info-header .pih-field label {
+    color: #000 !important;
+  }
+  body[data-page="workflow-details"] .permit-info-header .pih-field span,
+  body[data-page="workflow-details"] .permit-info-header .pih-field span.permit-number {
+    color: #000 !important;
+  }
+  body[data-page="workflow-details"] .permit-info-header .pih-status {
+    align-items: flex-start;
+  }
+  body[data-page="workflow-details"] .permit-info-header .pih-status .badge {
+    background: #000 !important;
+    color: #fff !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Permit Type Cards (Permit Approval Encoding)
+   -------------------------------------------------------------------------- */
+.permit-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.permit-card {
+  background: #fff;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: transform var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
+  box-shadow: var(--shadow-xs);
+}
+.permit-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+.permit-card.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-50);
+  box-shadow: var(--shadow-sm);
+}
+.permit-card .permit-card-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.permit-card .permit-card-icon svg {
+  width: 23px;
+  height: 23px;
+}
+.permit-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-800);
+  text-align: center;
+}
+.section-hint {
+  font-size: 12.5px;
+  color: var(--gray-500);
+  margin-bottom: 14px;
+}
+@media (max-width: 640px) {
+  .permit-cards { grid-template-columns: 1fr; }
+}
+
+.form-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+.form-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
+  padding-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .form-grid-3 { grid-template-columns: 1fr; }
+}
+
+.table-toolbar .date-sep {
+  color: var(--gray-400);
+  font-weight: 700;
+}

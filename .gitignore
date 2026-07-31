@@ -1,0 +1,12 @@
+# PHP
+*.log
+
+# User-uploaded files (personal data / documents)
+uploads/
+
+# Local environment
+config/app.local.php
+.env
+
+# Internal QA artifacts
+QA_AUDIT_REPORT.txt

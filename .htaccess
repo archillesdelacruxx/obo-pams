@@ -1,0 +1,7 @@
+# Prevent directory listing
+Options -Indexes
+
+# Custom branded error pages (403 / 404 / 500)
+ErrorDocument 403 /PAMS/error.php
+ErrorDocument 404 /PAMS/error.php
+ErrorDocument 500 /PAMS/error.php

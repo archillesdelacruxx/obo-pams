@@ -1,0 +1,223 @@
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.table-toolbar .search-box {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.table-toolbar .search-box svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--gray-400);
+}
+
+.table-toolbar .search-box input {
+  width: 100%;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  padding: 0 12px 0 34px;
+  font-size: 13px;
+}
+
+.table-toolbar .search-box input:focus {
+  background: #fff;
+  border-color: var(--color-primary-400);
+  box-shadow: var(--shadow-focus);
+}
+
+.table-toolbar select,
+.table-toolbar input[type=date] {
+  height: 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+
+.table-toolbar .spacer {
+  flex: 1;
+}
+
+/* ── Scrollable table wrappers (both admin .scroll-x and user .data-table-wrap) ── */
+.data-table-wrap,
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 360px);
+  position: relative;
+  /* Custom thin scrollbars for tables */
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-300) transparent;
+}
+
+.data-table-wrap::-webkit-scrollbar,
+.scroll-x::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.data-table-wrap::-webkit-scrollbar-track,
+.scroll-x::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.data-table-wrap::-webkit-scrollbar-thumb,
+.scroll-x::-webkit-scrollbar-thumb {
+  background: var(--gray-300);
+  border-radius: 99px;
+}
+
+.data-table-wrap::-webkit-scrollbar-thumb:hover,
+.scroll-x::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-400);
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 760px;
+}
+
+/* Sticky header — works in both scroll contexts */
+.data-table thead th,
+.scroll-x .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #000;
+  padding: 12px 22px;
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  white-space: nowrap;
+  /* Bottom shadow creates the "pinned" visual effect without a border glitch */
+  box-shadow: inset 0 -1px 0 var(--gray-200);
+}
+
+.data-table tbody td {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 13.5px;
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+
+.data-table tbody tr {
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.data-table tbody tr:hover {
+  background: var(--gray-50);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table .cell-user {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.data-table .cell-user strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--gray-900);
+}
+
+.data-table .cell-user span {
+  font-size: 11.5px;
+  color: var(--gray-500);
+}
+
+.data-table .row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.data-table .track-id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gray-600);
+  background: var(--gray-100);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination button {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+
+.pagination button:hover {
+  border-color: var(--color-primary-400);
+  color: var(--color-primary);
+}
+
+.pagination button.active {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.module-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 220px;
+}
+
+.module-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  padding: 3px 8px;
+  border-radius: 6px;
+}

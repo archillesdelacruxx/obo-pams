@@ -1,0 +1,114 @@
+/* ==========================================================================
+   PAMS — Design Tokens
+   Permit Application Management System
+   ========================================================================== */
+
+/* Load all required font weights directly from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root{
+  /* Brand blue — deep civic blue rather than a generic SaaS azure */
+  --color-primary-900:#0B2559;
+  --color-primary-700:#123E8C;
+  --color-primary-600:#1651B8;
+  --color-primary:#1D5FD6;
+  --color-primary-500:#1D5FD6;
+  --color-primary-400:#3E7BEA;
+  --color-primary-100:#DCE7FB;
+  --color-primary-50:#F3F7FE;
+
+  --white:#FFFFFF;
+
+  --gray-50:#F7F8FA;
+  --gray-100:#EFF1F5;
+  --gray-200:#E3E6EC;
+  --gray-300:#CDD2DC;
+  --gray-400:#9AA2B1;
+  --gray-500:#6B7280;
+  --gray-600:#4B5468;
+  --gray-700:#333B4F;
+  --gray-800:#1F2534;
+  --gray-900:#12151F;
+
+  --success:#1C8A4B;
+  --success-light:#E4F6EC;
+  --warning:#B5720A;
+  --warning-bg:#FDF0DC;
+  --danger:#C22B2B;
+  --danger-light:#FBE7E7;
+  --info:#1D5FD6;
+  --info-light:#EAF1FD;
+
+  --font-display:'Sora', 'Segoe UI', sans-serif;
+  --font-body:'Inter', 'Segoe UI', sans-serif;
+  --font-mono:'JetBrains Mono', 'Consolas', monospace;
+
+  --radius-xs:6px;
+  --radius-sm:8px;
+  --radius-md:12px;
+  --radius-lg:14px;
+  --radius-xl:20px;
+  --radius-pill:999px;
+
+  --shadow-xs:0 1px 2px rgba(15,23,42,.05);
+  --shadow-sm:0 1px 3px rgba(18,21,31,.06), 0 1px 2px rgba(18,21,31,.04);
+  --shadow-md:0 6px 16px -4px rgba(18,21,31,.10), 0 2px 6px rgba(18,21,31,.06);
+  --shadow-lg:0 18px 40px -12px rgba(18,21,31,.18);
+  --shadow-focus:0 0 0 3px var(--color-primary-100);
+
+  --ease:cubic-bezier(.4,0,.2,1);
+  --dur-fast:120ms;
+  --dur-base:200ms;
+  --dur-slow:360ms;
+
+  --sidebar-w:260px;
+  --sidebar-w-collapsed:78px;
+  --header-h:68px;
+  --content-max:1440px;
+}
+
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{
+  margin:0;
+  font-family:var(--font-body);
+  font-weight:400;
+  font-size:14px;
+  line-height:1.6;
+  color:var(--gray-800);
+  background:var(--gray-50);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+h1,h2,h3,h4,h5{
+  font-family:var(--font-display);
+  margin:0;
+  color:var(--gray-900);
+  letter-spacing:-.02em;
+  line-height:1.2;
+}
+h1{font-weight:700; font-size:24px;}
+h2{font-weight:700; font-size:20px;}
+h3{font-weight:700; font-size:17px;}
+h4{font-weight:600; font-size:15px;}
+h5{font-weight:600; font-size:13.5px;}
+p{margin:0; line-height:1.6;}
+a{color:inherit; text-decoration:none;}
+ul{margin:0; padding:0; list-style:none;}
+button{font-family:inherit; font-weight:600;}
+img{max-width:100%; display:block;}
+:focus-visible{outline:2px solid var(--color-primary-400); outline-offset:2px;}
+::selection{background:var(--color-primary-100);}
+
+.mono{font-family:var(--font-mono); letter-spacing:.01em;}
+
+/* Text weight utilities */
+.fw-400{font-weight:400;}
+.fw-500{font-weight:500;}
+.fw-600{font-weight:600;}
+.fw-700{font-weight:700;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important; transition-duration:.001ms !important;}
+}
