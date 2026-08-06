@@ -2128,11 +2128,6 @@ body[data-page="order-of-payment"] .form-card .section-body {
   .report-doc .rpt-sig-title { font-size: 12px; }
   .report-doc .rpt-sig-date { font-size: 12px; }
   .report-doc .rpt-foot { font-size: 12px; }
-  .report-doc .rpt-logo img { width: 100px; height: 100px; }
-  .report-doc .rpt-summary-boxes { display: flex; gap: 8px; margin-bottom: 8px; }
-  .report-doc .rpt-summary-box { flex: 1; border: 1px solid #000; padding: 6px 10px; font-size: 12px; }
-  .report-doc .rpt-summary-box .box-label { font-weight: 800; text-transform: uppercase; font-size: 11px; letter-spacing: .05em; margin-bottom: 2px; }
-  .report-doc .rpt-summary-box .box-value { font-size: 13px; }
 }
 
 @media (max-width: 640px) {

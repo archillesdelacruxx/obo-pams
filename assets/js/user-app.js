@@ -1939,21 +1939,6 @@ function renderReportDoc(rec) {
       <tbody>${catRows}</tbody>
     </table>
 
-    <div class="rpt-summary-boxes">
-      <div class="rpt-summary-box">
-        <div class="box-label">Percentage</div>
-        <div class="box-value">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</div>
-      </div>
-      <div class="rpt-summary-box">
-        <div class="box-label">Boundary</div>
-        <div class="box-value">${(() => { const sb = ['Front', 'Rear', 'Right Side', 'Left Side'].map(k => xfSb[k] ? `${escapeHtml(k)} ${escapeHtml(xfSb[k])}m` : '').filter(Boolean).join(', '); return sb || '—'; })()}</div>
-      </div>
-      <div class="rpt-summary-box">
-        <div class="box-label">Remarks</div>
-        <div class="box-value">${escapeHtml(rec.recommendations || '') || '—'}</div>
-      </div>
-    </div>
-
     <div class="rpt-block">
       <div class="rpt-block-title">SUMMARY OF INSPECTION</div>
       <div class="rpt-block-body">${escapeHtml(rec.overall_findings || '')}</div>
