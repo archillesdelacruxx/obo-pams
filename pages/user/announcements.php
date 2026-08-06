@@ -7,14 +7,14 @@ requirePermission('announcements');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Announcements · PAMS User</title>
+  <title>Announcements Â· PAMS User</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -46,7 +46,9 @@ requirePermission('announcements');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260802"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

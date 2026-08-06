@@ -7,6 +7,7 @@ function renderAdminSidebar(string $activeKey): string {
         ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
         ['key' => 'reports', 'label' => 'Reports', 'page' => 'reports.php', 'icon' => 'bar-chart'],
         ['key' => 'users', 'label' => 'User Management', 'page' => 'user-management.php', 'icon' => 'users'],
+        ['key' => 'notifications', 'label' => 'Announcements', 'page' => 'notifications.php', 'icon' => 'megaphone'],
         ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'],
         ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'],
     ];
@@ -77,13 +78,6 @@ function renderAdminHeader(string $pageTitle): string {
             <kbd>/</kbd>
         </div>
         <div class="header-right">
-            <div class="dropdown-wrap">
-                <button class="icon-btn header-badge-btn" id="notifBtn" aria-label="Notifications">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    <span class="dot"></span>
-                </button>
-                <div class="dropdown-panel" id="notifPanel"></div>
-            </div>
             <div class="dropdown-wrap">
                 <div class="profile-trigger" id="profileTrigger">
                     <div class="avatar sm">' . $avatarHtml . '</div>

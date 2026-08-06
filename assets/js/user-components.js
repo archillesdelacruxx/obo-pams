@@ -17,7 +17,8 @@ const USER_NAV_ITEMS = [
   { key: 'permit-approval-records',  label: 'Permit Approval Records',  page: 'permit-approval-records.php',       icon: 'layers',       section: 'Modules' },
   { key: 'releasing',                label: 'Releasing Plans',          page: 'releasing.php',                     icon: 'package',      section: 'Modules' },
   { key: 'releasing-records',        label: 'Releasing Records',        page: 'releasing-records.php',             icon: 'layers',       section: 'Modules' },
-  { key: 'notifications',            label: 'Notifications',            page: 'notifications.php',                 icon: 'bell',         section: 'Account', badge: true },
+  { key: 'inspection-checklist',     label: 'Ocular Inspection Checklist', page: 'inspection-checklist.php',      icon: 'clipboard',    section: 'Inspection Management' },
+  { key: 'inspection-reports',       label: 'Monitoring Reports',       page: 'inspection-reports.php',            icon: 'activity',     section: 'Inspection Management' },
   { key: 'announcements',            label: 'Announcements',            page: 'announcements.php',                 icon: 'megaphone',    section: 'Account' },
   { key: 'settings',                 label: 'Settings',                 page: 'settings.php',                      icon: 'settings',     section: 'Account' },
   { key: 'profile',                  label: 'Profile',                  page: 'profile.php',                       icon: 'user',         section: 'Account' }
@@ -57,6 +58,8 @@ const USER_NAV_ICONS = {
   'activity':    '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   'shield-check':'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
   'clipboard':   '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 0-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
+  'activity':    '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  'calendar':    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   'trash':       '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>'
 };
 
@@ -91,7 +94,6 @@ function renderUserSidebar(activeKey) { return ''; }
    Build header
    -------------------------------------------------------------------------- */
 function renderUserHeader(pageTitle) {
-  const unread = getUnreadCount();
   return `
   <header class="header">
     <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
@@ -105,7 +107,7 @@ function renderUserHeader(pageTitle) {
     <div class="header-right">
       <div class="dropdown-wrap">
         <button class="icon-btn header-badge-btn" id="notifBtn" aria-label="Notifications">
-          ${userIcon('bell')}${unread > 0 ? '<span class="dot"></span>' : ''}
+          ${userIcon('bell')}<span class="dot" style="display:none;"></span>
         </button>
         <div class="dropdown-panel" id="notifPanel"></div>
       </div>
@@ -139,18 +141,19 @@ async function renderUserNotifPanel() {
     const res = await apiGet('notifications', 'list');
     _cachedNotifs = res.data || [];
   } catch (e) { _cachedNotifs = []; }
-  const items = _cachedNotifs.slice(0, 5);
+  const unreadNotifs = _cachedNotifs.filter(n => !n.is_read);
+  const items = unreadNotifs.slice(0, 5);
   if (!items.length) return '<div class="notif-empty" style="padding:24px;text-align:center;color:var(--gray-400);">No notifications</div>';
   return `
     <div class="notif-head">
       <strong>Notifications</strong>
-      <span>${_cachedNotifs.filter(n => !n.is_read).length} unread</span>
+      <span>${unreadNotifs.length} unread</span>
     </div>
     <div class="notif-list">
       ${items.map(n => `
-        <div class="notif-item ${n.is_read ? '' : 'unread'}">
-          <div class="n-icon icon-${n.type === 'announcement' ? 'blue' : n.type === 'approved' ? 'green' : n.type === 'record' ? 'orange' : 'blue'}">
-            ${userIcon(n.type === 'announcement' ? 'megaphone' : n.type === 'approved' ? 'check-circle' : n.type === 'record' ? 'file-text' : 'bell')}
+        <div class="notif-item unread" data-notif-item="1" data-notif-id="${n.id}" data-notif-record="${n.record_id || ''}" data-notif-module="${n.module_name || ''}" style="cursor:pointer;">
+          <div class="n-icon icon-${n.module_name === 'announcement' ? 'blue' : n.module_name === 'approved' ? 'green' : 'blue'}">
+            ${userIcon(n.module_name === 'announcement' ? 'megaphone' : n.module_name === 'approved' ? 'check-circle' : 'bell')}
           </div>
           <div class="n-content">
             <strong>${n.title}</strong>
@@ -160,7 +163,7 @@ async function renderUserNotifPanel() {
         </div>`).join('')}
     </div>
     <div class="notif-footer">
-      <a href="notifications.php" data-user-nav="notifications.php">View all notifications</a>
+      <a href="announcements.php" data-user-nav="announcements.php">View all announcements</a>
     </div>`;
 }
 
@@ -217,7 +220,39 @@ function initUserHeaderDropdowns() {
   const profilePanel   = $('#profilePanel');
 
   async function loadNotifPanel() {
-    if (notifPanel) notifPanel.innerHTML = await renderUserNotifPanel();
+    if (notifPanel) {
+      notifPanel.innerHTML = await renderUserNotifPanel();
+      bindNotifPanelItems(notifPanel);
+    }
+  }
+
+  function bindNotifPanelItems(panel) {
+    panel.querySelectorAll('[data-notif-item]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.dataset.notifId;
+        const recordId = el.dataset.notifRecord;
+        const moduleName = el.dataset.notifModule;
+        if (id && el.classList.contains('unread')) {
+          await apiGet('notifications', 'mark-read', { id }).catch(() => {});
+        }
+        if (moduleName === 'announcements' && recordId) {
+          localStorage.setItem('pams_open_announcement', recordId);
+          window.location.href = 'announcements.php';
+          return;
+        }
+        window.location.href = 'announcements.php';
+      });
+    });
+  }
+
+  async function refreshNotifPanel() {
+    if (!notifPanel) return;
+    await getUnreadCount();
+    updateNotifBadge();
+    if (notifPanel.classList.contains('open')) {
+      notifPanel.innerHTML = await renderUserNotifPanel();
+      bindNotifPanelItems(notifPanel);
+    }
   }
 
   loadNotifPanel();
@@ -252,6 +287,10 @@ function initUserHeaderDropdowns() {
     e.preventDefault();
     openLogoutConfirm('../../logout.php');
   });
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('user-notif-panel', refreshNotifPanel, 10000);
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -303,7 +342,7 @@ function statusBadge(status) {
     'Pending':      '<span class="badge-workflow pending">Pending</span>',
     'Under Review': '<span class="badge-workflow in-progress">Under Review</span>',
     'Approved':     '<span class="badge-workflow completed">Approved</span>',
-    'Disapproved':  '<span class="badge-workflow pending">Disapproved</span>',
+    'Disapproved':  '<span class="badge-workflow disapproved">Disapproved</span>',
     'Released':     '<span class="badge-workflow released">Released</span>',
     'Paid':         '<span class="badge-workflow completed">Paid</span>',
     'in-progress':  '<span class="badge-workflow in-progress">In Process</span>',
@@ -312,7 +351,7 @@ function statusBadge(status) {
     'returned':     '<span class="badge-workflow returned">Returned</span>',
     'approved':     '<span class="badge-workflow completed">Approved</span>'
   };
-  return map[status] || `<span class="badge badge-neutral">${status}</span>`;
+  return map[status] || `<span class="badge badge-neutral">${status || 'Pending'}</span>`;
 }
 
 function formatDate(dateStr) {

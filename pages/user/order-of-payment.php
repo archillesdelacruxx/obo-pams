@@ -7,14 +7,14 @@ requirePermission('order-of-payment');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Order of Payment · PAMS User</title>
+  <title>Order of Payment Â· PAMS User</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -38,7 +38,7 @@ requirePermission('order-of-payment');
               <div class="form-grid">
                 <div class="form-group"><label>Transaction No. <span class="req">*</span></label><input class="form-control form-mono" type="text" id="opTransactionNo" placeholder="e.g. OR-2026-001"></div>
                 <div class="form-group"><label>Applicant Name <span class="req">*</span></label><input class="form-control" type="text" id="opApplicantName" placeholder="Full name of applicant"></div>
-                <div class="form-group"><label>Permit Type <span class="req">*</span></label><select class="form-control" id="opPermitType"><option value="">— Select —</option><option>New Business Permit</option><option>Renewal — Food Services</option><option>Occupancy Permit</option><option>Zoning Clearance</option><option>Signage Permit</option><option>Ancillary/Accessory</option></select></div>
+                <div class="form-group"><label>Permit Type <span class="req">*</span></label><select class="form-control" id="opPermitType"><option value="">â€” Select â€”</option><option>New Business Permit</option><option>Renewal â€” Food Services</option><option>Occupancy Permit</option><option>Zoning Clearance</option><option>Signage Permit</option><option>Ancillary/Accessory</option></select></div>
                 <div class="form-group"><label>Amount <span class="req">*</span></label><input class="form-control form-mono" type="number" step="0.01" min="0" id="opAmount" placeholder="0.00"></div>
                 <div class="form-group"><label>Payment Date</label><input class="form-control" type="date" id="opPaymentDate"></div>
                 <div class="form-group"><label>OR No.</label><input class="form-control form-mono" type="text" id="opOfficialReceiptNo" placeholder="Optional"></div>
@@ -72,7 +72,9 @@ requirePermission('order-of-payment');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260802"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

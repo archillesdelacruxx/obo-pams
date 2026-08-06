@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     dashboard: initDashboardPage,
     reports: initReportsPage,
     users: initUserManagementPage,
+    notifications: initAdminNotificationsPage,
+    'activity-logs': initActivityLogsPage,
     settings: initSettingsPage,
     profile: initProfilePage
   }[page];
@@ -24,46 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ---------------------------- DASHBOARD ---------------------------- */
 async function initDashboardPage(){
-
-  try {
-    const actRes = await apiGet('activity', 'list', { per_page: 6 });
-    const activities = actRes.data || [];
-    $('#recentActivities').innerHTML = activities.map(a => `
-      <div class="activity-item">
-        <div class="a-icon icon-blue">${icon('bell')}</div>
-        <div><p><b>${escapeHtml(a.user_name || 'System')}</b> ${a.description || a.action}</p><time>${timeAgo(a.created_at)}</time></div>
-      </div>`).join('');
-  } catch (e) { $('#recentActivities').innerHTML = '<div class="activity-item"><div>No recent activity.</div></div>'; }
-
-  try {
-    const annRes = await apiGet('announcements', 'list');
-    const announcements = (annRes.data || []).slice(0, 3);
-    $('#announcements').innerHTML = announcements.map(a => `
-      <div class="announcement">
-        <span class="a-tag">${a.created_by ? 'Announcement' : 'System'}</span>
-        <h5>${escapeHtml(a.title)}</h5>
-        <p>${escapeHtml((a.content || '').substring(0, 120))}</p>
-      </div>`).join('');
-  } catch (e) { $('#announcements').innerHTML = ''; }
-
-  try {
-    const notifRes = await apiGet('notifications', 'list');
-    const notifs = (notifRes.data || []).slice(0, 5);
-    const feed = $('#notifFeed');
-    if (feed) {
-      feed.innerHTML = notifs.map(n => `
-        <div class="notif-item ${n.is_read ? '' : 'unread'}">
-          <div class="n-icon icon-${n.module_name === 'announcement' ? 'blue' : n.module_name === 'approved' ? 'green' : n.module_name === 'record' ? 'orange' : 'blue'}">
-            ${icon(n.module_name === 'announcement' ? 'megaphone' : n.module_name === 'approved' ? 'check-circle' : n.module_name === 'record' ? 'file-text' : 'bell')}
-          </div>
-          <div class="n-content">
-            <strong>${escapeHtml(n.title)}</strong>
-            <p>${escapeHtml((n.message || '').substring(0, 75))}</p>
-            <time>${timeAgo(n.created_at)}</time>
-          </div>
-        </div>`).join('');
-    }
-  } catch (e) {}
+  try { await loadRecentActivities(); } catch (e) {}
+  try { await loadNotifFeed(); } catch (e) {}
 
   $('#notifShortcut')?.addEventListener('click', (e) => {
     e.preventDefault();
@@ -72,7 +36,9 @@ async function initDashboardPage(){
 
   const dash = window.DASHBOARD_DATA || null;
 
-  if (dash && dash.monthly && dash.monthly.length) {
+  if (dash && dash.monthly && dash.monthly.series && dash.monthly.series.length) {
+    renderMultiBarChart($('#monthlyChart'), dash.monthly, $('#monthlyChartLegend'));
+  } else if (dash && dash.monthly && dash.monthly.length) {
     renderBarChart($('#monthlyChart'), dash.monthly.map(m => ({ label: m.label, value: m.value })));
   } else {
     renderBarChart($('#monthlyChart'), [
@@ -90,6 +56,113 @@ async function initDashboardPage(){
       btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
+  });
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('dashboard-overview', loadOverview, 10000);
+    window.PAMS_REALTIME.register('dashboard-activity', loadRecentActivities, 15000);
+    window.PAMS_REALTIME.register('dashboard-notifs', loadNotifFeed, 15000);
+  }
+}
+
+async function loadRecentActivities(){
+  const actRes = await apiGet('activity', 'list', { per_page: 5 });
+  const activities = actRes.data || [];
+  $('#recentActivities').innerHTML = activities.map(a => `
+    <div class="activity-item">
+      <div class="a-icon icon-blue">${icon('bell')}</div>
+      <div><p><b>${escapeHtml(a.user_name || 'System')}</b> ${a.description || a.action}</p><time>${timeAgo(a.created_at)}</time></div>
+    </div>`).join('');
+}
+
+async function loadNotifFeed(){
+  const notifRes = await apiGet('notifications', 'list');
+  const notifs = (notifRes.data || []).slice(0, 5);
+  const feed = $('#notifFeed');
+  if (feed) {
+    feed.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.is_read ? '' : 'unread'}">
+        <div class="n-icon icon-${n.module_name === 'announcement' ? 'blue' : n.module_name === 'approved' ? 'green' : n.module_name === 'record' ? 'orange' : 'blue'}">
+          ${icon(n.module_name === 'announcement' ? 'megaphone' : n.module_name === 'approved' ? 'check-circle' : n.module_name === 'record' ? 'file-text' : 'bell')}
+        </div>
+        <div class="n-content">
+          <strong>${escapeHtml(n.title)}</strong>
+          <p>${escapeHtml((n.message || '').substring(0, 75))}</p>
+          <time>${timeAgo(n.created_at)}</time>
+        </div>
+      </div>`).join('');
+  }
+}
+
+async function initActivityLogsPage(){
+  const tbody = $('#activityTbody');
+  if (!tbody) return;
+
+  let page = 1;
+  const perPage = 20;
+
+  async function loadLogs() {
+    const params = { page, per_page: perPage };
+    const userId = $('#activityUserFilter')?.value || '';
+    const module = $('#activityModuleFilter')?.value || '';
+    const search = $('#activitySearch')?.value.trim() || '';
+    if (userId) params.user_id = userId;
+    if (module) params.module = module;
+    if (search) params.search = search;
+
+    const res = await apiGet('activity', 'list', params).catch(() => ({ data: [], total: 0, page: 1, per_page: perPage }));
+    const rows = res.data || [];
+    const total = res.total || 0;
+
+    tbody.innerHTML = rows.map(a => `
+      <tr>
+        <td class="cell-user">
+          <div class="avatar sm">${initials(a.user_name || 'System')}</div>
+          <div><strong>${escapeHtml(a.user_name || 'System')}</strong><span>@${escapeHtml(a.user_name || 'System')}</span></div>
+        </td>
+        <td>${escapeHtml(a.description || a.action)}</td>
+        <td><span class="module-tag">${escapeHtml(a.module_name || 'system')}</span></td>
+        <td>${a.created_at ? new Date(a.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—'}</td>
+        <td class="cell-mono">${escapeHtml(a.ip_address || '—')}</td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;padding:48px;color:var(--gray-400);">No activity records found.</td></tr>';
+
+    const rc = $('#activityRecordCount');
+    if (rc) rc.textContent = total + ' record' + (total !== 1 ? 's' : '');
+    const pi = $('#activityPageInfo');
+    if (pi) pi.textContent = total ? `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, total)} of ${total}` : 'No records';
+    $('#activityPrev').disabled = page <= 1;
+    $('#activityNext').disabled = page * perPage >= total;
+  }
+
+  $('#activityRefresh')?.addEventListener('click', () => { page = 1; loadLogs(); });
+  $('#activityPrev')?.addEventListener('click', () => { if (page > 1) { page--; loadLogs(); } });
+  $('#activityNext')?.addEventListener('click', () => { page++; loadLogs(); });
+  $('#activityUserFilter')?.addEventListener('change', () => { page = 1; loadLogs(); });
+  $('#activityModuleFilter')?.addEventListener('change', () => { page = 1; loadLogs(); });
+  $('#activitySearch')?.addEventListener('input', debounce(() => { page = 1; loadLogs(); }, 300));
+
+  await loadLogs();
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('activity-logs-table', loadLogs, 20000);
+  }
+}
+
+async function loadOverview(){
+  const res = await apiGet('dashboard', 'overview');
+  const data = res.data || {};
+  const map = {
+    op: data.op,
+    workflow: data.workflow,
+    approvals: data.approvals,
+    releasing: data.releasing,
+    users: data.users,
+    notifications: data.notifications
+  };
+  Object.keys(map).forEach(key => {
+    if (typeof map[key] !== 'number') return;
+    const figure = document.querySelector(`.stat-card[data-card="${key}"] .figure`);
+    if (figure) figure.textContent = map[key].toLocaleString();
   });
 }
 
@@ -158,6 +231,30 @@ function renderBarChart(container, data){
     </div>`).join('');
 }
 
+function renderMultiBarChart(container, data, legendEl){
+  if (!container) return;
+  const months = data.months || [];
+  const series = data.series || [];
+  const allValues = series.flatMap(s => s.values || []);
+  const max = Math.max(1, ...allValues);
+
+  container.innerHTML = months.map((m, i) => `
+    <div class="bar-col">
+      <div class="grouped-bars">
+        ${series.map((s, si) => {
+          const v = (s.values || [])[i] || 0;
+          const h = v > 0 ? Math.max(4, Math.round((v / max) * 100)) : 2;
+          return `<div class="bar gbar" style="height:${h}%;background:${s.color};animation-delay:${(i * 4 + si) * 60}ms;" title="${s.label}: ${v}"></div>`;
+        }).join('')}
+      </div>
+      <span>${m}</span>
+    </div>`).join('');
+
+  if (legendEl) {
+    legendEl.innerHTML = series.map(s => `<span><i style="background:${s.color};"></i> ${s.label}</span>`).join('');
+  }
+}
+
 function renderLineChart(svg, values){
   if (!svg) return;
   const w = 600, h = 200, pad = 10;
@@ -214,6 +311,14 @@ async function initReportsPage(){
       $('#totalApproved').textContent = formatNumber(totals.approved);
       $('#totalReleasing').textContent = formatNumber(totals.releasing);
       $('#totalOverall').textContent = formatNumber(totals.op + totals.workflow + totals.approved + totals.releasing);
+
+      const rs = $('#reportsSearch');
+      if (rs && rs.value.trim()) {
+        const q = rs.value.trim().toLowerCase();
+        $$('#reportsTableBody tr').forEach(row => {
+          row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+        });
+      }
     } catch (e) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:48px;color:var(--gray-400);">Failed to load reports data</td></tr>';
     }
@@ -225,19 +330,17 @@ async function initReportsPage(){
     return row.el.textContent.toLowerCase().includes(q);
   });
 
-  $('#exportBtn')?.addEventListener('click', async () => {
-    showToast({ title: 'Exporting', message: 'Preparing CSV download...', type: 'info' });
-    try {
-      const res = await apiGet('dashboard', 'export-csv');
-      if (res.csv) {
-        const blob = new Blob([res.csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'pams-report.csv'; a.click();
-        URL.revokeObjectURL(url);
-        showToast({ title: 'Export complete', message: 'CSV downloaded.', type: 'success' });
-      }
-    } catch (e) { showToast({ title: 'Export failed', message: 'Could not generate report.', type: 'error' }); }
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('reports-table', loadReports, 15000);
+  }
+
+  $('#exportBtn')?.addEventListener('click', () => {
+    const from = $('#reportsDateFrom')?.value;
+    const to = $('#reportsDateTo')?.value;
+    const params = new URLSearchParams({ module: 'dashboard', action: 'export-csv' });
+    if (from) params.set('date_from', from);
+    if (to) params.set('date_to', to);
+    window.open(`../api/index.php?${params.toString()}`, '_blank');
   });
   $('#printBtn')?.addEventListener('click', () => window.print());
 }
@@ -529,5 +632,82 @@ async function initProfilePage(){
     } catch (err) {
       showToast({ title: 'Error', message: 'Failed to change password.', type: 'error' });
     }
+  });
+}
+
+/* ---------------------------- NOTIFICATIONS & ANNOUNCEMENTS ---------------------------- */
+async function initAdminNotificationsPage() {
+  await loadAdminAnnouncements();
+
+  $('#announcementForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = $('#annTitle').value.trim();
+    const content = $('#annContent').value.trim();
+    if (!title || !content) {
+      showToast({ title: 'Missing fields', message: 'Please enter a title and content.', type: 'error' });
+      return;
+    }
+    try {
+      const res = await apiPost('announcements', 'create', { title, content });
+      if (res && res.success) {
+        showToast({ title: 'Announcement posted', message: res.message, type: 'success' });
+        e.target.reset();
+        await loadAdminAnnouncements();
+      } else {
+        showToast({ title: 'Error', message: (res && res.error) || 'Failed to post.', type: 'error' });
+      }
+    } catch (err) {
+      showToast({ title: 'Error', message: 'Failed to post announcement.', type: 'error' });
+    }
+  });
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('admin-announcements', loadAdminAnnouncements, 20000);
+  }
+}
+
+async function loadAdminAnnouncements() {
+  const tbody = $('#adminAnnouncementsTbody');
+  if (!tbody) return;
+  const res = await apiGet('announcements', 'list').catch(() => ({ data: [] }));
+  const rows = res.data || [];
+  const countEl = $('#adminAnnouncementsCount');
+  if (countEl) countEl.textContent = rows.length;
+  tbody.innerHTML = rows.map(a => `
+    <tr>
+      <td><strong>${escapeHtml(a.title || '—')}</strong></td>
+      <td>${escapeHtml(a.posted_by_name || '—')}</td>
+      <td style="white-space:nowrap;">${a.created_at ? timeAgo(a.created_at) : '—'}</td>
+      <td>
+        <button class="icon-btn del-ann-btn" data-id="${a.id}" aria-label="Delete announcement" style="color:var(--danger);">${icon('trash')}</button>
+      </td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('.del-ann-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const ann = rows.find(a => String(a.id) === String(id));
+      openConfirm({
+        title: 'Delete announcement?',
+        message: `This will permanently remove "${ann && ann.title ? ann.title : 'this announcement'}". You cannot undo this.`,
+        confirmLabel: 'Delete',
+        tone: 'danger',
+        icon: 'trash',
+        onConfirm: async () => {
+          try {
+            const res = await apiDelete('announcements', 'delete', id);
+            if (res && res.success) {
+              closeModal();
+              showToast({ title: 'Deleted', message: res.message, type: 'success' });
+              await loadAdminAnnouncements();
+            } else {
+              showToast({ title: 'Error', message: (res && res.error) || 'Failed to delete.', type: 'error' });
+            }
+          } catch (err) {
+            showToast({ title: 'Error', message: 'Failed to delete announcement.', type: 'error' });
+          }
+        }
+      });
+    });
   });
 }

@@ -7,14 +7,14 @@ requireAdmin();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Settings · PAMS</title>
+<title>Settings Â· PAMS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/variables.css">
 <link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css">
-<link rel="stylesheet" href="../assets/css/sidebar.css">
+<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
+<link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
 <link rel="stylesheet" href="../assets/css/header.css">
 <link rel="stylesheet" href="../assets/css/cards.css">
 <link rel="stylesheet" href="../assets/css/forms.css">
@@ -65,13 +65,13 @@ requireAdmin();
                     </div>
                     <div class="form-group">
                       <label>Office Name</label>
-                      <input class="form-control" value="Business Permits &amp; Licensing Office">
+                      <input class="form-control" value="Office of the Building Official">
                     </div>
                     <div class="form-group full">
                       <label>Office Logo</label>
                       <div class="upload-drop">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-                        <span>Click to upload a new logo (PNG, SVG — max 2MB)</span>
+                        <span>Click to upload a new logo (PNG, SVG â€” max 2MB)</span>
                       </div>
                     </div>
                   </div>
@@ -110,6 +110,8 @@ requireAdmin();
   <script src="../assets/js/search.js"></script>
   <script src="../assets/js/table.js"></script>
   <script src="../assets/js/validation.js"></script>
-  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../assets/js/app.js?v=20260803d"></script>
 </body>
 </html>
+

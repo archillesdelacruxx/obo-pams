@@ -1,10 +1,7 @@
 body.login-body{
-  background:var(--color-primary-900);
+  background:var(--gray-200);
   min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;
   font-family:var(--font-body);
-  background-image:
-    radial-gradient(circle at 12% 15%, rgba(62,123,234,.35), transparent 45%),
-    radial-gradient(circle at 88% 85%, rgba(62,123,234,.25), transparent 45%);
 }
 .login-shell{
   width:100%; max-width:960px; min-height:600px; background:#fff; border-radius:var(--radius-xl);
@@ -47,7 +44,8 @@ body.login-body{
 .login-error svg{width:16px; height:16px; flex-shrink:0;}
 
 .login-options{display:flex; align-items:center; justify-content:space-between; margin:2px 0 22px;}
-.login-options a{font-size:12.5px; font-weight:600; color:var(--color-primary);}
+.login-options a{font-size:12.5px; font-weight:600; color:var(--color-primary); cursor:pointer;}
+.login-options a:hover{text-decoration:underline;}
 
 .login-form-side .btn-primary{height:44px; font-size:14px;}
 .login-divider{display:flex; align-items:center; gap:12px; margin:26px 0; color:var(--gray-400); font-size:11.5px;}

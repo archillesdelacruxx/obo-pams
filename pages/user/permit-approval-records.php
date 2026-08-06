@@ -7,14 +7,14 @@ requirePermission('permit-approval-records');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Permit Approval Records · PAMS</title>
+  <title>Permit Approval Records Â· PAMS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -33,9 +33,9 @@ requirePermission('permit-approval-records');
         <div class="page-head"><div><h2>Permit Approval Records</h2><p class="subtitle">Search, filter, and export the history of approved permits.</p></div></div>
         <div class="section-card">
           <div class="table-toolbar">
-            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="recordsSearch" placeholder="Search app no., applicant, permit type…"></div>
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="recordsSearch" placeholder="Search app no., applicant, permit typeâ€¦"></div>
             <input type="date" id="recordsDateFrom" title="From approval date">
-            <span class="date-sep">–</span>
+            <span class="date-sep">â€“</span>
             <input type="date" id="recordsDateTo" title="To approval date">
             <div class="spacer"></div>
             <button class="btn btn-secondary btn-sm" id="recordsRefresh"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg> Refresh</button>
@@ -55,7 +55,9 @@ requirePermission('permit-approval-records');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260805"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

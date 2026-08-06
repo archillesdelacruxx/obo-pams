@@ -6,6 +6,8 @@
 }
 .bar-chart .bar.secondary{background:linear-gradient(180deg,#c9dafc,#a9c4f7);}
 .bar-chart .bar-col span{font-size:11px; color:var(--gray-500); font-weight:600;}
+.bar-chart .grouped-bars{display:flex; align-items:flex-end; gap:4px; width:100%; height:100%; justify-content:center;}
+.bar-chart .grouped-bars .bar{width:12px; max-width:12px; min-height:2px; border-radius:6px 6px 0 0;}
 @keyframes growUp{from{transform:scaleY(0);} to{transform:scaleY(1);}}
 
 .line-chart-svg{width:100%; height:210px;}

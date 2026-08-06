@@ -12,7 +12,8 @@ function getUserNavItems(): array {
         ['key' => 'permit-approval-records', 'label' => 'Permit Approval Records', 'page' => 'permit-approval-records.php', 'icon' => 'layers', 'section' => 'Modules'],
         ['key' => 'releasing', 'label' => 'Releasing Plans', 'page' => 'releasing.php', 'icon' => 'package', 'section' => 'Modules'],
         ['key' => 'releasing-records', 'label' => 'Releasing Records', 'page' => 'releasing-records.php', 'icon' => 'layers', 'section' => 'Modules'],
-        ['key' => 'notifications', 'label' => 'Notifications', 'page' => 'notifications.php', 'icon' => 'bell', 'section' => 'Account'],
+        ['key' => 'inspection-checklist', 'label' => 'Ocular Inspection Checklist', 'page' => 'inspection-checklist.php', 'icon' => 'clipboard', 'section' => 'Inspection Management'],
+        ['key' => 'inspection-reports', 'label' => 'Monitoring Reports', 'page' => 'inspection-reports.php', 'icon' => 'activity', 'section' => 'Inspection Management'],
         ['key' => 'announcements', 'label' => 'Announcements', 'page' => 'announcements.php', 'icon' => 'megaphone', 'section' => 'Account'],
         ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user', 'section' => 'Account'],
         ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings', 'section' => 'Account'],
@@ -35,21 +36,29 @@ function renderUserSidebar(string $activeKey): string {
     }
 
     $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
+    $navAllowed = function (string $key) use ($isAdmin, $alwaysVisible, $perms): bool {
+        if ($isAdmin) return true;
+        if (in_array($key, $alwaysVisible, true)) return true;
+        return !empty($perms[$key]);
+    };
     $sections = [];
     foreach ($items as $item) {
-        if (!$isAdmin && !in_array($item['key'], $alwaysVisible, true) && empty($perms[$item['key']])) continue;
         $sections[$item['section']][] = $item;
     }
 
     $navHtml = '';
     foreach ($sections as $section => $sectionItems) {
-        $navHtml .= '<div class="sidebar-section-label">' . escape($section) . '</div>';
+        $grantedItems = array_filter($sectionItems, fn($it) => $navAllowed($it['key']));
+        $sectionVisible = $isAdmin || count($grantedItems) > 0;
+        $navHtml .= '<div class="sidebar-section-label" data-nav-section="' . escape($section) . '"' . ($sectionVisible ? '' : ' hidden') . '>' . escape($section) . '</div>';
         foreach ($sectionItems as $item) {
             $active = $item['key'] === $activeKey ? ' active' : '';
+            $granted = $navAllowed($item['key']);
             $icon = getNavIcon($item['icon']);
-            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($item['page']) . '" href="' . escape($item['page']) . '" tabindex="0" aria-label="' . escape($item['label']) . '">'
+            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($item['page']) . '" data-module-key="' . escape($item['key']) . '" href="' . escape($item['page']) . '" tabindex="0" aria-label="' . escape($item['label']) . '"' . ($granted ? '' : ' hidden') . '>'
                 . $icon
                 . '<span class="label">' . escape($item['label']) . '</span>'
+                . ($item['key'] === 'notifications' ? '<span class="count" id="sidebarNotifBadge" style="display:none;">0</span>' : '')
                 . '</a>';
         }
     }
@@ -108,6 +117,7 @@ function renderUserHeader(string $pageTitle): string {
             <div class="dropdown-wrap">
                 <button class="icon-btn header-badge-btn" id="notifBtn" aria-label="Notifications">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    <span class="dot" style="display:none;"></span>
                 </button>
                 <div class="dropdown-panel" id="notifPanel"></div>
             </div>

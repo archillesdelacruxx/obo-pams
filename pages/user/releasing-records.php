@@ -7,14 +7,14 @@ requirePermission('releasing-records');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Releasing Records · PAMS User</title>
+  <title>Releasing Records Â· PAMS User</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -39,7 +39,7 @@ requirePermission('releasing-records');
         </div>
         <div class="section-card">
           <div class="table-toolbar">
-            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="relRecordsSearch" placeholder="Search records…"></div>
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="relRecordsSearch" placeholder="Search recordsâ€¦"></div>
             <div class="spacer"></div>
             <button class="btn btn-secondary btn-sm" id="relRecordsRefresh"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg> Refresh</button>
             <button class="btn btn-secondary btn-sm" id="relRecordsPrint"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print</button>
@@ -60,7 +60,9 @@ requirePermission('releasing-records');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260802"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

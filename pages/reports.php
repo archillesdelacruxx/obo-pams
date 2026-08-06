@@ -7,14 +7,14 @@ requireAdmin();
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reports · PAMS</title>
+<title>Reports Â· PAMS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/variables.css">
 <link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css">
-<link rel="stylesheet" href="../assets/css/sidebar.css">
+<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
+<link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
 <link rel="stylesheet" href="../assets/css/header.css">
 <link rel="stylesheet" href="../assets/css/cards.css">
 <link rel="stylesheet" href="../assets/css/tables.css">
@@ -72,7 +72,7 @@ requireAdmin();
           <div class="table-toolbar">
             <div class="search-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="reportsSearch" placeholder="Search by name or username…">
+              <input type="text" id="reportsSearch" placeholder="Search by name or usernameâ€¦">
             </div>
             <select>
               <option>All Modules</option>
@@ -81,8 +81,8 @@ requireAdmin();
               <option>Permit Approved</option>
               <option>Releasing</option>
             </select>
-            <input type="date" value="<?php echo date('Y-m-01'); ?>">
-            <input type="date" value="<?php echo date('Y-m-d'); ?>">
+            <input type="date" id="reportsDateFrom" value="<?php echo date('Y-m-01'); ?>">
+            <input type="date" id="reportsDateTo" value="<?php echo date('Y-m-d'); ?>">
             <div class="spacer"></div>
             <button class="btn btn-secondary btn-sm" id="printBtn">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
@@ -122,6 +122,8 @@ requireAdmin();
   <script src="../assets/js/search.js"></script>
   <script src="../assets/js/table.js"></script>
   <script src="../assets/js/validation.js"></script>
-  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../assets/js/app.js?v=20260803d"></script>
 </body>
 </html>
+

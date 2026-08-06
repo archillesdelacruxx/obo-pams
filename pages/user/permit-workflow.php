@@ -7,14 +7,14 @@ requirePermission('permit-workflow');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Permit Workflow · PAMS User</title>
+  <title>Permit Workflow Â· PAMS User</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -36,7 +36,7 @@ requirePermission('permit-workflow');
         </div>
         <div class="section-card">
           <div class="table-toolbar">
-            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="workflowSearch" placeholder="Search by permit number or applicant…"></div>
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input type="text" id="workflowSearch" placeholder="Search by permit number or applicantâ€¦"></div>
             <span class="text-xs text-muted" id="workflowRecordCount"></span>
             <button class="btn btn-secondary btn-sm" id="workflowRefresh">Refresh</button>
             <button class="btn btn-secondary btn-sm" id="workflowExport"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export in Excel</button>
@@ -59,7 +59,9 @@ requirePermission('permit-workflow');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260802"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

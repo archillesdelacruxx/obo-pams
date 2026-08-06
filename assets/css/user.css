@@ -79,39 +79,100 @@
 }
 
 /* --------------------------------------------------------------------------
-   Analytics Placeholder card
+   Usage Analytics card
    -------------------------------------------------------------------------- */
-.analytics-placeholder {
-  background: linear-gradient(135deg, var(--color-primary-50) 0%, var(--gray-50) 100%);
-  border: 1.5px dashed var(--color-primary-100);
-  border-radius: var(--radius-lg);
-  padding: 40px 24px;
-  text-align: center;
-  color: var(--gray-500);
+.seg-toggle {
+  display: inline-flex;
+  background: var(--gray-100);
+  border-radius: var(--radius-pill);
+  padding: 3px;
+  gap: 2px;
 }
-.analytics-placeholder .placeholder-icon {
-  width: 56px;
-  height: 56px;
-  background: var(--color-primary-100);
-  border-radius: 16px;
+.seg-toggle .seg-btn {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-500);
+  padding: 5px 13px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease);
+}
+.seg-toggle .seg-btn:hover {
+  color: var(--gray-700);
+}
+.seg-toggle .seg-btn.active {
+  background: #fff;
+  color: var(--color-primary);
+  box-shadow: 0 1px 4px rgba(15, 20, 32, .1);
+}
+.analytics-body {
+  padding: 18px 22px 6px;
+  min-height: 260px;
+}
+.bar-chart.grouped {
+  height: 220px;
+  gap: 6px;
+}
+.bar-chart.grouped .bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.bar-chart.grouped .bars-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+}
+.bar-chart.grouped .bars-row .bar {
+  width: 12px;
+  max-width: 12px;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: height .5s var(--ease);
+}
+.bar-chart.grouped .bar-group .day-label {
+  font-size: 10.5px;
+  color: var(--gray-500);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bar-chart.grouped.monthly .bars-row .bar {
+  width: 6px;
+  max-width: 6px;
+}
+.bar-chart.grouped.monthly .bars-row {
+  gap: 1px;
+}
+.analytics-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 4px;
+  border-top: 1px solid var(--gray-100);
+  margin-top: 14px;
+}
+.analytics-legend .al-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-  color: var(--color-primary);
+  gap: 7px;
+  font-size: 12px;
+  color: var(--gray-600);
+  font-weight: 500;
 }
-.analytics-placeholder .placeholder-icon svg {
-  width: 26px;
-  height: 26px;
-}
-.analytics-placeholder h4 {
-  font-size: 15px;
-  color: var(--gray-700);
-  margin-bottom: 6px;
-}
-.analytics-placeholder p {
-  font-size: 13px;
-  color: var(--gray-400);
+.analytics-legend .al-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }
 
 /* --------------------------------------------------------------------------
@@ -230,17 +291,17 @@
   letter-spacing: 0.01em;
 }
 .badge-workflow.pending {
-  background: #FF9800;
+  background: #F0A93B;
   color: #FFFFFF;
   font-weight: 800;
 }
 .badge-workflow.completed {
-  background: #4CAF50;
+  background: #22A55A;
   color: #FFFFFF;
   font-weight: 700;
 }
 .badge-workflow.in-progress {
-  background: #2196F3;
+  background: #5B8DEF;
   color: #FFFFFF;
   font-weight: 700;
 }
@@ -248,7 +309,12 @@
   display: none;
 }
 .badge-workflow.released {
-  background: #2196F3;
+  background: #8A94A6;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+.badge-workflow.disapproved {
+  background: #E5484D;
   color: #FFFFFF;
   font-weight: 700;
 }
@@ -1223,4 +1289,852 @@ body[data-page="order-of-payment"] .form-card .section-body {
 .table-toolbar .date-sep {
   color: var(--gray-400);
   font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — buttons
+   -------------------------------------------------------------------------- */
+.btn-success {
+  background: var(--success);
+  color: #fff;
+  box-shadow: var(--shadow-xs);
+}
+.btn-success:hover {
+  background: #156f3c;
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary-outline {
+  background: #fff;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.btn-primary-outline:hover {
+  background: var(--color-primary-50);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — checklist results
+   -------------------------------------------------------------------------- */
+.checklist-cat {
+  margin-bottom: 18px;
+}
+.checklist-cat-head {
+  background: var(--color-primary-50);
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding: 9px 14px;
+}
+.checklist-cat-head h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary-700);
+  margin: 0;
+}
+.checklist-cat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.mech-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--gray-600);
+}
+.mech-pct label {
+  margin: 0;
+}
+.mech-pct .form-control-sm {
+  width: 90px;
+}
+.mech-pct strong {
+  color: var(--gray-800);
+}
+.checklist-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  overflow: hidden;
+}
+.checklist-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #000;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+}
+.checklist-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--gray-100);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.checklist-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.checklist-table .col-result {
+  width: 230px;
+}
+.checklist-table .col-remarks {
+  width: 240px;
+}
+.radio-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--gray-600);
+}
+.radio-pill input {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+.sb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 14px 6px 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+.sb-item input {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.sb-cell {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+.sb-group-row td:first-child {
+  min-width: 260px;
+}
+.sb-report-row td {
+  border-right: 1px solid var(--gray-200);
+  text-align: center;
+  min-width: 90px;
+}
+.sb-report-row td:first-child {
+  text-align: left;
+  min-width: 140px;
+}
+.sb-report-cell strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.checklist-table input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.checklist-table .col-check {
+  width: 70px;
+  text-align: center;
+}
+.sb-text-row td,
+.floor-level-row td {
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-50);
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.sb-text-label {
+  font-size: 12px;
+  color: #000;
+  font-weight: 700;
+  min-width: 150px;
+}
+.sb-text-cells {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 14px;
+}
+.sb-text-head {
+  font-size: 12px;
+  color: #000;
+  font-weight: 700;
+  min-width: 78px;
+}
+.sb-text-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sb-text-field label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+  white-space: nowrap;
+}
+.sb-text-field .form-control-sm {
+  width: 100%;
+  max-width: 110px;
+  min-width: 60px;
+}
+@media (max-width: 767.98px) {
+  .sb-text-cells {
+    flex-wrap: wrap;
+  }
+}
+.others-line {
+  margin-top: 5px;
+  max-width: 320px;
+}
+.cat-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #000;
+  font-weight: 700;
+}
+.cat-pct label {
+  margin: 0;
+}
+.cat-pct .form-control-sm {
+  width: 90px;
+}
+.cat-remark-wrap {
+  padding: 8px 14px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  margin-bottom: 18px;
+}
+.cat-remark-wrap label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #000;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.cat-remark {
+  width: 100%;
+  resize: vertical;
+  min-height: 44px;
+}
+.cat-pct-report {
+  font-size: 12.5px;
+  color: #000;
+  font-weight: 700;
+}
+.cat-pct-report strong {
+  color: #000;
+}
+.cat-extra {
+  font-size: 12.5px;
+  color: #000;
+  font-weight: 600;
+  padding: 8px 14px;
+  background: var(--gray-50);
+  border-left: 1px solid var(--gray-200);
+  border-right: 1px solid var(--gray-200);
+}
+.sb-report-pill {
+  display: inline-block;
+  margin: 2px 10px 2px 0;
+  color: #000;
+  font-weight: 600;
+}
+.sb-report-pill strong {
+  color: #000;
+}
+.form-control-sm {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 12.5px;
+}
+.checklist-cat.disabled { opacity: .7; }
+
+/* Signature + Site Photos side by side */
+.insch-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: stretch;
+  margin-bottom: 22px;
+}
+.insch-split .section-card {
+  margin: 0;
+}
+@media (max-width: 991.98px) {
+  .insch-split {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-bottom: 0;
+  }
+  .insch-split .section-card + .section-card {
+    margin-top: 22px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — signature pad
+   -------------------------------------------------------------------------- */
+.sig-wrap {
+  max-width: 640px;
+}
+.signature-pad {
+  width: 100%;
+  height: 200px;
+  border: 1.5px dashed var(--gray-300);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+.sig-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.sig-saved {
+  margin-top: 10px;
+}
+.sig-img {
+  display: block;
+  max-height: 70px;
+  max-width: 260px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-xs);
+  padding: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — site photos
+   -------------------------------------------------------------------------- */
+.photo-drop {
+  border: 1.5px dashed var(--gray-300);
+  border-radius: var(--radius-md);
+  padding: 22px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-500);
+  cursor: pointer;
+  transition: border-color var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
+}
+.photo-drop:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-50);
+}
+.photo-drop p {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+}
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.photo-thumb {
+  position: relative;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #fff;
+}
+.photo-thumb img {
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  display: block;
+}
+.photo-thumb-meta {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--gray-500);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.photo-thumb-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, .92);
+  border-radius: 50%;
+  padding: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — report document
+   -------------------------------------------------------------------------- */
+.modal-box.report-modal {
+  width: min(94vw, 1100px);
+  max-width: 1100px;
+}
+@media (min-width: 1600px) {
+  .modal-box.report-modal {
+    width: min(90vw, 1400px);
+    max-width: 1400px;
+  }
+}
+.report-doc {
+  color: var(--gray-800);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  max-width: none;
+  margin: 0 auto;
+  padding: 0;
+  text-align: left;
+}
+.report-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--gray-200);
+  margin-bottom: 16px;
+}
+.report-logo {
+  display: flex;
+  gap: 8px;
+}
+.report-logo img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.report-title {
+  flex: 1;
+  text-align: center;
+}
+.report-title span {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+.report-title h2 {
+  font-size: 12px;
+  margin: 2px 0;
+  letter-spacing: .02em;
+}
+.report-title h3 {
+  font-size: 12px;
+  color: var(--color-primary-700);
+  margin: 2px 0;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.report-title .text-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gray-600);
+}
+.report-status {
+  align-self: flex-start;
+}
+.report-section {
+  margin-bottom: 16px;
+}
+.report-section h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gray-600);
+  margin: 0 0 8px;
+}
+.report-text {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+.report-info {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.report-info td {
+  border: 1px solid var(--gray-200);
+  padding: 7px 12px;
+  font-size: 12px;
+  vertical-align: top;
+}
+.report-info td.k {
+  background: var(--gray-50);
+  font-weight: 600;
+  color: var(--gray-600);
+  width: 140px;
+  white-space: nowrap;
+}
+.report-signatures {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.report-sig {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+}
+.report-sig-line {
+  height: 52px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-bottom: 1px solid var(--gray-800);
+  margin-bottom: 6px;
+}
+.report-sig-name {
+  font-weight: 700;
+  font-size: 12px;
+}
+.report-sig-label {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+.report-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.report-photo {
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  padding-bottom: 6px;
+}
+.report-photo img {
+  width: 100%;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+}
+.report-photo .text-xs {
+  padding: 4px 8px 0;
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — official MONITORING REPORT (print-friendly)
+   -------------------------------------------------------------------------- */
+.rpt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  border-bottom: 3px double #000;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.rpt-logo img {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+}
+.rpt-title {
+  flex: 1;
+}
+.rpt-rep {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  letter-spacing: .06em;
+}
+.rpt-city {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.rpt-office {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.rpt-doc {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  border: 2px solid #000;
+  display: inline-block;
+  padding: 4px 16px;
+  margin-top: 3px;
+  background: #fff;
+}
+.rpt-info,
+.rpt-cat {
+  font-family: Arial, sans-serif;
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.rpt-info td,
+.rpt-cat th,
+.rpt-cat td {
+  border: 1px solid #000;
+  padding: 4px 8px;
+  vertical-align: top;
+}
+.rpt-info td.k {
+  background: #f2f2f2;
+  font-weight: 700;
+  width: 140px;
+  white-space: nowrap;
+}
+.rpt-info td.c,
+.rpt-cat td.c {
+  text-align: center;
+}
+.rpt-cat th {
+  background: #f2f2f2;
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: .05em;
+}
+.rpt-cat td.k {
+  font-weight: 700;
+}
+.rpt-block {
+  border: 1px solid #000;
+  margin-bottom: 6px;
+}
+.rpt-block-title {
+  font-family: Arial, sans-serif;
+  background: #f2f2f2;
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: .08em;
+  padding: 6px 12px;
+  border-bottom: 1px solid #000;
+}
+.rpt-block-body {
+  font-family: Arial, sans-serif;
+  padding: 10px 12px;
+  min-height: 30px;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+.rpt-result {
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+.rpt-check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: Arial, sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+}
+.rpt-check .box {
+  font-size: 12px;
+}
+.rpt-check.on .box {
+  color: #000;
+}
+.rpt-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 4px;
+  padding: 6px;
+}
+.rpt-signatures {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 8px;
+}
+.rpt-sig {
+  flex: 1;
+  text-align: left;
+}
+.rpt-sig-head {
+  font-family: Arial, sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .08em;
+  margin-bottom: 12px;
+}
+.rpt-sig-line {
+  height: 35px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  border-bottom: 1px solid #000;
+  margin-bottom: 3px;
+}
+.rpt-sig-line img.sig-img {
+  max-height: 30px;
+}
+.rpt-sig-name {
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+}
+.rpt-sig-title {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+.rpt-sig-date {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+.rpt-foot {
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  justify-content: space-between;
+  border-top: 1px solid #000;
+  padding-top: 4px;
+  font-size: 12px;
+  color: #000;
+}
+.rpt-foot-gen {
+  flex: 1;
+  text-align: left;
+}
+
+/* --------------------------------------------------------------------------
+   Inspection module — print
+   -------------------------------------------------------------------------- */
+@media print {
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .sidebar,
+  .header,
+  .breadcrumb,
+  .page-head,
+  .no-print {
+    display: none !important;
+  }
+  .main-col {
+    margin-left: 0 !important;
+  }
+  .page-content {
+    padding: 0 !important;
+  }
+  .section-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    break-inside: avoid;
+  }
+  .btn,
+  .icon-btn,
+  .photo-drop,
+  .sig-actions,
+  .table-footer .pagination,
+  .row-actions {
+    display: none !important;
+  }
+  .signature-pad {
+    border: 1px solid #000 !important;
+  }
+  .form-control,
+  .checklist-table {
+    border-color: #bbb !important;
+  }
+
+  /* Print the report document standalone (report modal open) */
+  body:has(.modal-wrap.open) * {
+    visibility: hidden;
+  }
+  body:has(.modal-wrap.open) .report-doc,
+  body:has(.modal-wrap.open) .report-doc * {
+    visibility: visible !important;
+  }
+  body:has(.modal-wrap.open) .modal-wrap,
+  body:has(.modal-wrap.open) .modal-box,
+  body:has(.modal-wrap.open) .modal-body {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    width: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  body:has(.modal-wrap.open) .modal-wrap .backdrop,
+  body:has(.modal-wrap.open) .modal-head,
+  body:has(.modal-wrap.open) .modal-foot {
+    display: none !important;
+  }
+  body:has(.modal-wrap.open) .report-doc {
+    position: static !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #000 !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    max-width: none !important;
+    text-align: left !important;
+    page-break-before: avoid;
+    break-before: avoid;
+  }
+  .report-doc .signature-pad {
+    border: 1px solid #000 !important;
+  }
+  .report-doc .rpt-rep { font-size: 12px; }
+  .report-doc .rpt-city { font-size: 12px; }
+  .report-doc .rpt-office { font-size: 12px; }
+  .report-doc .rpt-doc { font-size: 12px; }
+  .report-doc .rpt-info,
+  .report-doc .rpt-cat { font-size: 12px; }
+  .report-doc .rpt-cat th { font-size: 12px; }
+  .report-doc .rpt-block-title { font-size: 12px; }
+  .report-doc .rpt-check { font-size: 12px; }
+  .report-doc .rpt-sig-head { font-size: 12px; }
+  .report-doc .rpt-sig-name { font-size: 12px; }
+  .report-doc .rpt-sig-title { font-size: 12px; }
+  .report-doc .rpt-sig-date { font-size: 12px; }
+  .report-doc .rpt-foot { font-size: 12px; }
+}
+
+@media (max-width: 640px) {
+  .report-signatures {
+    flex-direction: column;
+  }
+  .photo-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  }
 }

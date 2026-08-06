@@ -7,14 +7,14 @@ requirePermission('workflow-details');
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Workflow Details · PAMS User</title>
+  <title>Workflow Details Â· PAMS User</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -31,7 +31,7 @@ requirePermission('workflow-details');
       <main class="page-content fade-in">
         <div class="breadcrumb"><span>PAMS</span><span class="sep">/</span><a href="permit-workflow.php" style="color:var(--gray-500);">Permit Workflow</a><span class="sep">/</span><span class="current">Workflow Details</span></div>
         <div class="page-head"><div><h1>Workflow Details</h1><p class="subtitle">Review the complete processing timeline for a permit application.</p></div><a class="btn btn-ghost btn-sm" href="permit-workflow.php"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to Permit Workflow</a></div>
-        <div id="wdLoading" style="text-align:center;padding:48px 24px;color:var(--gray-400);">Loading workflow details…</div>
+        <div id="wdLoading" style="text-align:center;padding:48px 24px;color:var(--gray-400);">Loading workflow detailsâ€¦</div>
         <div id="wdError" style="display:none;text-align:center;padding:48px 24px;color:var(--danger);">Failed to load workflow details.</div>
         <div id="wdEmpty" style="display:none;">
           <div class="section-card">
@@ -44,15 +44,15 @@ requirePermission('workflow-details');
         </div>
         <div id="wdContent" style="display:none;">
         <div class="permit-info-header" id="wdInfoHeader">
-          <div class="pih-field"><label>Permit No.</label><span class="permit-number" id="wdPermitNumber">—</span></div>
-          <div class="pih-field"><label>Applicant</label><span id="wdApplicant">—</span></div>
-          <div class="pih-field"><label>App. No.</label><span id="wdAppNo">—</span></div>
-          <div class="pih-field"><label>Application</label><span id="wdApplication">—</span></div>
-          <div class="pih-field"><label>Permit Type</label><span id="wdType">—</span></div>
+          <div class="pih-field"><label>Permit No.</label><span class="permit-number" id="wdPermitNumber">â€”</span></div>
+          <div class="pih-field"><label>Applicant</label><span id="wdApplicant">â€”</span></div>
+          <div class="pih-field"><label>App. No.</label><span id="wdAppNo">â€”</span></div>
+          <div class="pih-field"><label>Application</label><span id="wdApplication">â€”</span></div>
+          <div class="pih-field"><label>Permit Type</label><span id="wdType">â€”</span></div>
           <div class="pih-field"><label>Current Round</label><span id="wdCurrentRound">Round 1</span></div>
           <div class="pih-field"><label>Total TAT</label><span class="permit-number" id="wdTotalTat">0 days</span></div>
           <div class="pih-field"><label>Total Rounds</label><span id="wdTotalRounds">0</span></div>
-          <div class="pih-field"><label>Last Updated</label><span id="wdLastUpdated">—</span></div>
+          <div class="pih-field"><label>Last Updated</label><span id="wdLastUpdated">â€”</span></div>
           <div class="pih-field pih-status"><label>Status</label><span id="wdStatus"></span></div>
         </div>
         <div class="section-card" style="margin-top:16px;">
@@ -78,7 +78,9 @@ requirePermission('workflow-details');
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260802"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

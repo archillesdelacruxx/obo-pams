@@ -45,14 +45,14 @@ if ($type === 'demolition') { $permitNoLabel = 'DP#'; $appNoLabel = 'DAN#'; $per
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Encode <?php echo $permitLabel; ?> · PAMS</title>
+  <title>Encode <?php echo $permitLabel; ?> Â· PAMS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css">
-  <link rel="stylesheet" href="../../assets/css/sidebar.css">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
   <link rel="stylesheet" href="../../assets/css/forms.css">
@@ -71,7 +71,7 @@ if ($type === 'demolition') { $permitNoLabel = 'DP#'; $appNoLabel = 'DAN#'; $per
         <div class="page-head"><div><h1>Encode <?php echo $permitLabel; ?></h1><p class="subtitle">Fill in the details below and save the approved permit record.</p></div></div>
 
         <div class="section-card">
-          <div class="section-head"><h3><?php echo $permitLabel; ?> — Encoding Form</h3><a class="btn btn-ghost btn-sm" href="permit-approval-encoding.php"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to permit selection</a></div>
+          <div class="section-head"><h3><?php echo $permitLabel; ?> â€” Encoding Form</h3><a class="btn btn-ghost btn-sm" href="permit-approval-encoding.php"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back to permit selection</a></div>
           <div class="section-body">
             <?php if ($isBuilding): ?>
             <form id="buildingForm" class="approval-form">
@@ -293,7 +293,9 @@ if ($type === 'demolition') { $permitNoLabel = 'DP#'; $appNoLabel = 'DAN#'; $per
   <script src="../../assets/js/dropdown.js"></script>
   <script src="../../assets/js/notification.js"></script>
   <script src="../../assets/js/modal.js"></script>
-  <script src="../../assets/js/user-components.js"></script>
-  <script src="../../assets/js/user-app.js?v=20260814"></script>
+  <script src="../../assets/js/user-components.js?v=20260803e"></script>
+  <script src="../../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../../assets/js/user-app.js?v=20260803e"></script>
 </body>
 </html>
+

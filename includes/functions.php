@@ -9,6 +9,22 @@ function redirect(string $url): void {
     exit;
 }
 
+function isAjaxRequest(): bool {
+    return isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+}
+
+function setFlashMessage(string $message, string $type = 'success'): void {
+    $_SESSION['flash_message'] = $message;
+    $_SESSION['flash_type'] = $type;
+}
+
+function getFlashMessage(): array {
+    $message = $_SESSION['flash_message'] ?? '';
+    $type = $_SESSION['flash_type'] ?? 'success';
+    unset($_SESSION['flash_message'], $_SESSION['flash_type']);
+    return [$message, $type];
+}
+
 function jsonResponse(array $data, int $status = 200): void {
     http_response_code($status);
     header('Content-Type: application/json');
@@ -63,6 +79,9 @@ function getNavIcon(string $name): string {
         'megaphone'  => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>',
         'layers'     => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
         'award'      => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2 5L8 8l-7 3 5-5M12 15l2 5 2-7 7 3-5-5M12 15V3"/></svg>',
+        'calendar'   => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+        'clipboard'  => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 0-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+        'activity'   => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
         'eye'        => '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
     ];
     return $icons[$name] ?? '<!-- unknown icon -->';
@@ -72,4 +91,19 @@ function formatDate(string $dateStr): string {
     if (!$dateStr) return '—';
     $ts = strtotime($dateStr);
     return date('M j, Y', $ts);
+}
+
+function normalizeWorkflowStatus(string $status): string {
+    $map = [
+        'pending' => 'Pending',
+        'in-progress' => 'Under Review',
+        'in_process' => 'Under Review',
+        'under-review' => 'Under Review',
+        'approved' => 'Approved',
+        'disapproved' => 'Disapproved',
+        'released' => 'Released',
+    ];
+    $normalized = $map[$status] ?? $status;
+    if (!$normalized) return 'Pending';
+    return $normalized;
 }

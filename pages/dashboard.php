@@ -27,8 +27,10 @@ $releasingToday = (int)$pdo->query("SELECT COUNT(*) FROM releasing_plans WHERE d
 $notifCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE is_read = 0')->fetchColumn();
 
 $opTrend = monthlyTrend($pdo, 'order_of_payments', 'payment_date');
+$workflowTrend = monthlyTrend($pdo, 'permit_workflows', 'created_at');
 $approvalTrend = monthlyTrend($pdo, 'permit_approvals', 'approval_date');
 $releaseTrend = monthlyTrend($pdo, 'releasing_plans', 'date_released');
+$monthlyLabels = array_column($opTrend, 'label');
 
 $workflowStatus = ['Pending' => 0, 'Under Review' => 0, 'Approved' => 0, 'Disapproved' => 0, 'Released' => 0];
 foreach ($pdo->query('SELECT status, COUNT(*) c FROM permit_workflows GROUP BY status') as $r) {
@@ -62,7 +64,15 @@ $analytics = [
         ['key' => 'users', 'type' => 'list', 'title' => 'Registered users', 'subtitle' => 'By role', 'items' => [['label' => 'Admin', 'value' => $userCounts['admin'], 'color' => '#1D5FD6'], ['label' => 'OBO User', 'value' => $userCounts['obo'], 'color' => '#22A55A']], 'total' => $userCounts['admin'] + $userCounts['obo']],
         ['key' => 'notifications', 'type' => 'list', 'title' => 'Notifications', 'subtitle' => 'Read status', 'items' => [['label' => 'Unread', 'value' => $unreadNotifs, 'color' => '#E5484D'], ['label' => 'Read', 'value' => $readNotifs, 'color' => '#8A94A6']], 'total' => $unreadNotifs + $readNotifs],
     ],
-    'monthly' => $opTrend,
+    'monthly' => [
+        'months' => $monthlyLabels,
+        'series' => [
+            ['key' => 'op',        'label' => 'Order of Payment', 'color' => '#5B8DEF', 'values' => array_column($opTrend, 'value')],
+            ['key' => 'workflow',  'label' => 'Permit Workflow',  'color' => '#F0A93B', 'values' => array_column($workflowTrend, 'value')],
+            ['key' => 'approvals', 'label' => 'Permits Approved', 'color' => '#22A55A', 'values' => array_column($approvalTrend, 'value')],
+            ['key' => 'releasing', 'label' => 'Releasing',        'color' => '#8A94A6', 'values' => array_column($releaseTrend, 'value')],
+        ],
+    ],
     'yearly' => $yearly,
 ];
 ?>
@@ -71,14 +81,14 @@ $analytics = [
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard · PAMS</title>
+<title>Dashboard Â· PAMS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/css/variables.css">
 <link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css">
-<link rel="stylesheet" href="../assets/css/sidebar.css">
+<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
+<link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
 <link rel="stylesheet" href="../assets/css/header.css">
 <link rel="stylesheet" href="../assets/css/cards.css">
 <link rel="stylesheet" href="../assets/css/dashboard.css">
@@ -100,7 +110,7 @@ $analytics = [
         </div>
         <div class="page-head">
           <div>
-            <h1>Good morning, <?php echo escape(explode(' ', $_SESSION['full_name'])[0]); ?> 👋</h1>
+            <h1>Good morning, <?php echo escape(explode(' ', $_SESSION['full_name'])[0]); ?> ðŸ‘‹</h1>
             <p class="subtitle">Here's the overall status of the Permit Application Management System today.</p>
           </div>
           <div class="flex gap-sm">
@@ -172,7 +182,7 @@ $analytics = [
               <div class="chart-head">
                 <div>
                   <h3 style="font-size:15px;">6-Month Analytics</h3>
-                  <p class="text-xs text-muted">Order of Payment volume, Feb – Jul 2026</p>
+                  <p class="text-xs text-muted">All modules &middot; <?php echo $monthlyLabels[0] ?: ''; ?> â€“ <?php echo end($monthlyLabels) ?: ''; ?> <?php echo date('Y'); ?></p>
                 </div>
                 <div class="seg-tabs">
                   <button class="active">Monthly</button>
@@ -180,12 +190,13 @@ $analytics = [
                 </div>
               </div>
               <div class="bar-chart" id="monthlyChart"></div>
+              <div class="chart-legend" id="monthlyChartLegend" style="margin-top:14px;"></div>
             </div>
             <div class="chart-card" style="margin-top:22px;">
               <div class="chart-head">
                 <div>
                   <h3 style="font-size:15px;">Yearly Analytics</h3>
-                  <p class="text-xs text-muted">Total permit throughput, Jan – Dec 2026</p>
+                  <p class="text-xs text-muted">Total permit throughput, Jan â€“ Dec 2026</p>
                 </div>
                 <div class="chart-legend"><span><i style="background:var(--color-primary);"></i> Permits processed</span></div>
               </div>
@@ -194,12 +205,8 @@ $analytics = [
           </div>
           <div>
             <div class="section-card">
-              <div class="section-head"><h3>Recent Activities</h3></div>
+              <div class="section-head"><h3>Recent Activities</h3><a class="btn btn-secondary" href="activity-logs.php" data-nav="activity-logs.php" style="padding:6px 12px;font-size:12px;">View all</a></div>
               <div class="section-body" id="recentActivities" style="padding-top:4px;padding-bottom:4px;"></div>
-            </div>
-            <div class="section-card">
-              <div class="section-head"><h3>Latest Announcements</h3></div>
-              <div class="section-body" id="announcements" style="padding-top:4px;padding-bottom:4px;"></div>
             </div>
           </div>
         </div>
@@ -220,6 +227,8 @@ $analytics = [
   <script src="../assets/js/search.js"></script>
   <script src="../assets/js/table.js"></script>
   <script src="../assets/js/validation.js"></script>
-  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/realtime.js?v=20260803b"></script>
+  <script src="../assets/js/app.js?v=20260803d"></script>
 </body>
 </html>
+

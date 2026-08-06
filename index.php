@@ -8,6 +8,7 @@ if (isAuthenticated()) {
 }
 
 $error = '';
+$successRedirect = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -17,9 +18,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $result = authenticate($username, $password);
         if ($result['success']) {
-            redirect($result['redirect']);
+            $successRedirect = $result['redirect'];
+        } else {
+            $error = $result['error'];
         }
-        $error = $result['error'];
+    }
+
+    if (isAjaxRequest()) {
+        jsonResponse([
+            'success' => !empty($successRedirect),
+            'redirect' => $successRedirect,
+            'error' => $error
+        ]);
     }
 }
 ?>
@@ -35,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link rel="stylesheet" href="assets/css/utilities.css">
   <link rel="stylesheet" href="assets/css/buttons.css">
   <link rel="stylesheet" href="assets/css/forms.css">
+  <link rel="stylesheet" href="assets/css/modal.css">
   <link rel="stylesheet" href="assets/css/login.css">
   <link rel="stylesheet" href="assets/css/responsive.css">
 </head>
@@ -44,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="gov-mark">
         <img src="assets/images/OBO LOGO.png" alt="OBO logo" class="gov-logo">
         <img src="assets/images/GENSAN LOGO.png" alt="Gensan logo" class="gov-logo">
-        <span>Office of the City Mayor<br>Business Permits &amp; Licensing Office</span>
+        <span>Office of the Building Official</span>
       </div>
       <div class="login-illustration">
         <svg viewBox="0 0 320 260" width="100%" height="220" fill="none">
@@ -104,13 +115,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <label class="checkbox-row">
             <input type="checkbox" id="rememberMe"> Remember me
           </label>
-          <a href="#">Forgot password?</a>
+          <a href="#" id="forgotLink">Forgot password?</a>
         </div>
         <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
           <span id="loginBtnText">Sign In</span>
         </button>
       </form>
 
+    </div>
+  </div>
+  <div class="modal-wrap" id="forgotModal">
+    <div class="backdrop" data-close-modal></div>
+    <div class="modal-box sm confirm-modal">
+      <div class="modal-head">
+        <h3>Forgot password</h3>
+        <button type="button" class="icon-btn" data-close-modal aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="c-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+        <h3>Contact the admin</h3>
+        <p>Please contact the admin to change or reset your password.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" data-close-modal>Close</button>
+      </div>
     </div>
   </div>
   <div class="loading-overlay" id="pageLoader">
@@ -128,21 +165,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       const loader = $('#pageLoader');
       initPasswordToggle($('#pwToggle'), passwordEl);
 
-      form.addEventListener('submit', (e) => {
-        <?php if ($error): ?>
-        errorBox.classList.remove('show');
-        <?php endif; ?>
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
         if (!validateLoginForm(usernameEl, passwordEl)) {
-          e.preventDefault();
           return;
         }
         const btn = $('#loginBtn');
         btn.setAttribute('disabled', 'true');
         $('#loginBtnText').innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;border-color:rgba(255,255,255,.4);border-top-color:#fff;"></span>';
         loader.classList.add('show');
+
+        const resetBtn = () => {
+          btn.removeAttribute('disabled');
+          $('#loginBtnText').textContent = 'Sign In';
+          loader.classList.remove('show');
+        };
+
+        try {
+          const res = await fetch('index.php', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: new FormData(form)
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.href = data.redirect;
+          } else {
+            errorBox.classList.add('show');
+            $('#loginErrorText').textContent = data.error || 'Invalid username or password.';
+            resetBtn();
+          }
+        } catch (err) {
+          errorBox.classList.add('show');
+          $('#loginErrorText').textContent = 'Unable to sign in. Please try again.';
+          resetBtn();
+        }
       });
 
       [usernameEl, passwordEl].forEach(el => el.addEventListener('input', () => clearFieldError(el)));
+
+      const forgotModal = $('#forgotModal');
+      $('#forgotLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        forgotModal.classList.add('open');
+      });
+      forgotModal.querySelectorAll('[data-close-modal]').forEach(el => {
+        el.addEventListener('click', () => forgotModal.classList.remove('open'));
+      });
     });
   </script>
 </body>

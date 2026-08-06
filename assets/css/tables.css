@@ -158,6 +158,13 @@ table.data-table {
   gap: 6px;
 }
 
+.data-table .cell-name {
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .data-table .track-id {
   font-family: var(--font-mono);
   font-size: 12px;

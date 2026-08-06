@@ -25,7 +25,9 @@ function initSidebar(){
   });
 }
 
-/* Any element carrying data-nav or data-user-nav becomes a navigation trigger. */
+/* Any element carrying data-nav or data-user-nav becomes a navigation trigger.
+   Capture phase is used so navigation still fires even when a descendant (e.g.
+   .dropdown-panel) stops propagation during the bubble phase. */
 function initNavRouting(){
   document.addEventListener('click', (e) => {
     const trigger = e.target.closest('[data-nav], [data-user-nav]');
@@ -33,5 +35,5 @@ function initNavRouting(){
     const target = trigger.getAttribute('data-nav') || trigger.getAttribute('data-user-nav');
     if (!target) return;
     window.location.href = target;
-  });
+  }, true);
 }

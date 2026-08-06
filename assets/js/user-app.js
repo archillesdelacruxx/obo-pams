@@ -16,11 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     'workflow-details': initWorkflowDetailsPage,
     'releasing': initReleasingPage,
     'releasing-records': initReleasingRecordsPage,
-    'notifications': initNotificationsPage,
     'announcements': initAnnouncementsPage,
     'permit-approval-encoding': initPermitApprovalEncodingPage,
     'permit-encoding-form': initPermitEncodingFormPage,
     'permit-approval-records': initPermitApprovalRecordsPage,
+    'inspection-schedule': initInspectionSchedulePage,
+    'inspection-checklist': initInspectionChecklistPage,
+    'inspection-reports': initInspectionReportsPage,
+    'inspection-history': initInspectionHistoryPage,
     'user-settings': initUserSettingsPage,
     'user-profile': initUserProfilePage
   }[page];
@@ -43,130 +46,179 @@ async function initUserDashboardPage() {
   const greetEl = $('#userGreeting');
   if (greetEl) greetEl.textContent = `${getGreeting()}, ${firstName} 👋`;
 
-  let userPerms = [];
-  try { userPerms = JSON.parse(document.body.dataset.permissions || '[]'); } catch (e) {}
-  const permSet = new Set(userPerms);
+  await Promise.all([
+    loadUserStats().catch(() => {}),
+    loadUserAnnouncements().catch(() => {}),
+    loadUserAnalytics().catch(() => {})
+  ]);
 
-  const hasPerm = key => permSet.has(key);
-
-  try {
-    const [statsRes, opRes, workflowRes] = await Promise.all([
-      apiGet('dashboard', 'stats'),
-      apiGet('op', 'list', { per_page: 5 }).catch(() => ({ data: [] })),
-      apiGet('workflow', 'list', {}).catch(() => ({ data: [] }))
-    ]);
-
-    const stats = statsRes.data || {};
-
-    const moduleCards = [];
-    if (hasPerm('order-of-payment') && stats.op) {
-      moduleCards.push({ title: 'Order of Payment', icon: 'file-text', color: 'blue', data: stats.op });
-    }
-    if (hasPerm('permit-workflow') && stats.workflow) {
-      moduleCards.push({ title: 'Permit Workflow', icon: 'git-branch', color: 'blue', data: stats.workflow });
-    }
-    if ((hasPerm('permit-approval-encoding') || hasPerm('permit-approval-records')) && stats.approval) {
-      moduleCards.push({ title: 'Permit Approved', icon: 'check-circle', color: 'green', data: stats.approval });
-    }
-    if (hasPerm('releasing') && stats.releasing) {
-      moduleCards.push({ title: 'Releasing', icon: 'package', color: 'orange', data: stats.releasing });
-    }
-
-    const statGrid = $('#userStatGrid');
-    if (statGrid) {
-      const periods = [
-        { key: 'week', label: 'This Week' },
-        { key: 'month', label: 'This Month' },
-        { key: 'year', label: 'This Year' }
-      ];
-      const allCards = [];
-      moduleCards.forEach(c => {
-        periods.forEach(p => {
-          allCards.push({ title: `${c.title} · ${p.label}`, icon: c.icon, color: c.color, value: c.data[p.key] });
-        });
-      });
-      statGrid.innerHTML = allCards.map(card => `
-        <div class="stat-card">
-          <div class="top"><div class="icon icon-${card.color}">${userIcon(card.icon)}</div></div>
-          <div class="figure">${card.value}</div>
-          <div class="label">${card.title}</div>
-        </div>`).join('');
-    }
-
-    const actFeed = $('#userRecentActivities');
-    if (actFeed) {
-      const activityItems = [];
-      if (hasPerm('order-of-payment') && opRes.data) {
-        opRes.data.slice(0, 5).forEach(r => {
-          activityItems.push(`<div class="activity-item"><div class="a-icon icon-blue">${userIcon('file-text')}</div><div><p>You encoded <b>${r.official_receipt_no || r.transaction_no}</b> for <b>${r.applicant_name}</b>.</p><time>${timeAgo(r.created_at)}</time></div></div>`);
-        });
-      }
-      if (hasPerm('permit-workflow') && workflowRes.data) {
-        workflowRes.data.slice(0, 5).forEach(r => {
-          activityItems.push(`<div class="activity-item"><div class="a-icon icon-blue">${userIcon('git-branch')}</div><div><p>Updated workflow for <b>${r.applicant_name}</b> (${r.application_no}).</p><time>${timeAgo(r.created_at)}</time></div></div>`);
-        });
-      }
-      actFeed.innerHTML = activityItems.slice(0, 8).join('') || '<p style="text-align:center;padding:24px;color:var(--gray-400);font-size:13px;">No recent activities.</p>';
-    }
-  } catch (e) {
-    console.error('Dashboard load error:', e);
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('user-dashboard-stats', loadUserStats, 10000);
+    window.PAMS_REALTIME.register('user-dashboard-announcements', loadUserAnnouncements, 30000);
+    window.PAMS_REALTIME.register('user-dashboard-analytics', loadUserAnalytics, 15000);
   }
 
-  let notifData = [];
-  if (hasPerm('notifications')) {
-    const notifRes = await apiGet('notifications', 'list').catch(() => ({ data: [] }));
-    notifData = notifRes.data || [];
-  }
-
-  const notifFeed = $('#userNotifFeed');
-  if (notifFeed) {
-    notifFeed.innerHTML = notifData.slice(0, 3).map((n, i) => `
-      <div class="notif-item ${n.is_read ? '' : 'unread'}" data-notif-index="${i}" style="cursor:pointer;">
-        <div class="ni-dot" ${n.is_read ? 'style="opacity:0"' : ''}></div>
-        <div class="ni-body"><strong>${n.title}</strong><p>${(n.message || '').substring(0, 80)}</p><time>${timeAgo(n.created_at)}</time></div>
-      </div>`).join('') || '<p style="text-align:center;padding:24px;color:var(--gray-400);font-size:13px;">No notifications yet.</p>';
-    notifFeed.querySelectorAll('.notif-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const idx = parseInt(el.dataset.notifIndex);
-        const n = notifData[idx];
-        if (!n) return;
-        const label = MODULE_LABELS[n.module_name] || n.module_name || 'System';
-        const color = MODULE_COLORS[n.module_name] || 'var(--gray-400)';
-        openModal(`
-          <div class="modal-head">
-            <h3>${n.title}</h3>
-            <button class="icon-btn" data-close-modal aria-label="Close">${userIcon('x')}</button>
-          </div>
-          <div class="modal-body">
-            <div style="display:flex;flex-direction:column;gap:12px;">
-              <div style="display:flex;gap:10px;align-items:center;">
-                <span class="badge badge-neutral" style="font-size:11px;background:${color};color:#fff;">${label}</span>
-                <span style="font-size:12px;color:var(--gray-400);">${n.created_at ? formatDate(n.created_at) : ''}</span>
-                ${n.is_read ? '' : '<span style="font-size:11px;color:var(--color-primary);font-weight:600;">● Unread</span>'}
-              </div>
-              <p style="font-size:14px;line-height:1.6;color:var(--gray-700);">${n.message}</p>
-              ${n.sender_name ? `<div style="font-size:12px;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:12px;">From <strong>${n.sender_name}</strong></div>` : ''}
-            </div>
-          </div>
-          <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Close</button></div>`);
-      });
+  const toggle = $('#analyticsPeriodToggle');
+  if (toggle) {
+    toggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('.seg-btn');
+      if (!btn || !toggle.contains(btn)) return;
+      toggle.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadUserAnalytics().catch(() => {});
     });
   }
+}
 
-  let annData = [];
-  if (hasPerm('announcements')) {
-    const annRes = await apiGet('announcements', 'list').catch(() => ({ data: [] }));
-    annData = annRes.data || [];
+const ANALYTICS_MODULES = [
+  { key: 'op',       label: 'Order of Payment', color: '#5B8DEF' },
+  { key: 'workflow', label: 'Permit Workflow',  color: '#F0A93B' },
+  { key: 'approval', label: 'Permit Approved',  color: '#22A55A' },
+  { key: 'releasing',label: 'Releasing',        color: '#8A94A6' }
+];
+
+function getAnalyticsModules() {
+  const hasPerm = key => getPermSet().has(key);
+  const modules = [];
+  if (hasPerm('order-of-payment')) modules.push(ANALYTICS_MODULES[0]);
+  if (hasPerm('permit-workflow')) modules.push(ANALYTICS_MODULES[1]);
+  if (hasPerm('permit-approval-encoding') || hasPerm('permit-approval-records')) modules.push(ANALYTICS_MODULES[2]);
+  if (hasPerm('releasing')) modules.push(ANALYTICS_MODULES[3]);
+  return modules;
+}
+
+function renderAnalyticsChart(periodData, modules) {
+  const maxCount = Math.max(1, ...periodData.flatMap(d => modules.map(m => d[m.key] ?? 0)));
+  return periodData.map(d => {
+    const bars = modules.map(m => {
+      const c = d[m.key] ?? 0;
+      const h = c > 0 ? Math.max(4, Math.round((c / maxCount) * 100)) : 2;
+      return `<div class="bar" style="height:${h}%;background:${m.color};" title="${m.label}: ${c}"></div>`;
+    }).join('');
+    return `<div class="bar-group"><div class="bars-row">${bars}</div><span class="day-label">${d.label}</span></div>`;
+  }).join('');
+}
+
+function renderAnalyticsLegend(modules) {
+  return modules.map(m => `<div class="al-item"><i style="background:${m.color};"></i>${m.label}</div>`).join('');
+}
+
+async function loadUserAnalytics() {
+  const body = $('#userAnalyticsBody');
+  if (!body) return;
+  const modules = getAnalyticsModules();
+  if (!modules.length) {
+    body.innerHTML = '<p style="text-align:center;padding:30px 0;color:var(--gray-400);font-size:13px;">No module access to show analytics.</p>';
+    return;
   }
 
-  const annFeed = $('#userAnnouncementsFeed');
-  if (annFeed) {
-    annFeed.innerHTML = annData.slice(0, 3).map(a => `
-      <div class="announcement">
-        <h5>${a.title}</h5>
-        <p>${(a.content || '').substring(0, 100)}…</p>
+  const res = await apiGet('dashboard', 'trends').catch(() => null);
+  const trends = res && res.data ? res.data : {};
+
+  let period = 'week';
+  const activeBtn = $('#analyticsPeriodToggle .seg-btn.active');
+  if (activeBtn) period = activeBtn.dataset.period;
+
+  const chartEl = document.createElement('div');
+  chartEl.className = 'bar-chart grouped';
+  if (period === 'month') chartEl.classList.add('monthly');
+  const periodData = (trends[modules[0].key] || {})[period] || [];
+  chartEl.innerHTML = renderAnalyticsChart(periodData, modules);
+
+  const legendEl = document.createElement('div');
+  legendEl.className = 'analytics-legend';
+  legendEl.innerHTML = renderAnalyticsLegend(modules);
+
+  body.innerHTML = '';
+  body.appendChild(chartEl);
+  body.appendChild(legendEl);
+}
+
+function getPermSet() {
+  if (!window.__permSet) {
+    let perms = [];
+    try { perms = JSON.parse(document.body.dataset.permissions || '[]'); } catch (e) {}
+    window.__permSet = new Set(perms);
+  }
+  return window.__permSet;
+}
+
+async function loadUserStats() {
+  const hasPerm = key => getPermSet().has(key);
+
+  const [statsRes, opRes, workflowRes] = await Promise.all([
+    apiGet('dashboard', 'stats'),
+    apiGet('op', 'list', { per_page: 5 }).catch(() => ({ data: [] })),
+    apiGet('workflow', 'list', {}).catch(() => ({ data: [] }))
+  ]);
+
+  const stats = statsRes.data || {};
+
+  const moduleCards = [];
+  if (hasPerm('order-of-payment') && stats.op) {
+    moduleCards.push({ title: 'Order of Payment', icon: 'file-text', color: 'blue', data: stats.op });
+  }
+  if (hasPerm('permit-workflow') && stats.workflow) {
+    moduleCards.push({ title: 'Permit Workflow', icon: 'git-branch', color: 'blue', data: stats.workflow });
+  }
+  if ((hasPerm('permit-approval-encoding') || hasPerm('permit-approval-records')) && stats.approval) {
+    moduleCards.push({ title: 'Permit Approved', icon: 'check-circle', color: 'green', data: stats.approval });
+  }
+  if (hasPerm('releasing') && stats.releasing) {
+    moduleCards.push({ title: 'Releasing', icon: 'package', color: 'orange', data: stats.releasing });
+  }
+
+  const statGrid = $('#userStatGrid');
+  if (statGrid) {
+    const periods = [
+      { key: 'week', label: 'This Week' },
+      { key: 'month', label: 'This Month' },
+      { key: 'year', label: 'This Year' }
+    ];
+    const allCards = [];
+    moduleCards.forEach(c => {
+      periods.forEach(p => {
+        allCards.push({ title: `${c.title} · ${p.label}`, icon: c.icon, color: c.color, value: c.data[p.key] });
+      });
+    });
+    statGrid.innerHTML = allCards.map(card => `
+      <div class="stat-card">
+        <div class="top"><div class="icon icon-${card.color}">${userIcon(card.icon)}</div></div>
+        <div class="figure">${card.value}</div>
+        <div class="label">${card.title}</div>
       </div>`).join('');
   }
+
+  const actFeed = $('#userRecentActivities');
+  if (actFeed) {
+    const activityItems = [];
+    if (hasPerm('order-of-payment') && opRes.data) {
+      opRes.data.slice(0, 5).forEach(r => {
+        activityItems.push(`<div class="activity-item"><div class="a-icon icon-blue">${userIcon('file-text')}</div><div><p>You encoded <b>${r.official_receipt_no || r.transaction_no}</b> for <b>${r.applicant_name}</b>.</p><time>${timeAgo(r.created_at)}</time></div></div>`);
+      });
+    }
+    if (hasPerm('permit-workflow') && workflowRes.data) {
+      workflowRes.data.slice(0, 5).forEach(r => {
+        activityItems.push(`<div class="activity-item"><div class="a-icon icon-blue">${userIcon('git-branch')}</div><div><p>Updated workflow for <b>${r.applicant_name}</b> (${r.application_no}).</p><time>${timeAgo(r.created_at)}</time></div></div>`);
+      });
+    }
+    actFeed.innerHTML = activityItems.slice(0, 8).join('') || '<p style="text-align:center;padding:24px;color:var(--gray-400);font-size:13px;">No recent activities.</p>';
+  }
+}
+
+async function loadUserAnnouncements() {
+  const hasPerm = key => getPermSet().has(key);
+  const annFeed = $('#userAnnouncementsFeed');
+  if (!annFeed || !hasPerm('announcements')) return;
+
+  const annRes = await apiGet('announcements', 'list').catch(() => ({ data: [] }));
+  const annData = annRes.data || [];
+
+  annFeed.innerHTML = annData.slice(0, 3).map(a => `
+    <div class="announcement">
+      <h5>${a.title}</h5>
+      <p>${(a.content || '').substring(0, 100)}…</p>
+    </div>`).join('');
 }
 
 /* ==========================================================================
@@ -373,6 +425,19 @@ async function initOpRecordsPage() {
     if (search) params.set('search', search);
     window.open(`../../api/index.php?${params.toString()}`, '_blank');
   });
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('op-records-table', loadOpRecordsTable, 12000);
+  }
+}
+
+function applyOpRecordsSearch() {
+  const searchInput = $('#opRecordsSearch');
+  if (!searchInput) return;
+  const q = searchInput.value.toLowerCase();
+  $$('#opRecordsTbody tr').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
 }
 
 async function loadOpRecordsTable() {
@@ -400,14 +465,11 @@ async function loadOpRecordsTable() {
     </tr>`).join('');
 
   const searchInput = $('#opRecordsSearch');
-  if (searchInput) {
-    const handler = debounce((q) => {
-      $$('#opRecordsTbody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
-      });
-    }, 220);
-    searchInput.addEventListener('input', e => handler(e.target.value));
+  if (searchInput && !searchInput.dataset.opBound) {
+    searchInput.dataset.opBound = '1';
+    searchInput.addEventListener('input', debounce(applyOpRecordsSearch, 220));
   }
+  applyOpRecordsSearch();
 
   renderPagination('#opRecordsPagination', rows.length);
 }
@@ -427,6 +489,10 @@ async function initPermitWorkflowPage() {
     const handler = debounce((q) => { loadWorkflowTable(q); }, 300);
     searchInput.addEventListener('input', (e) => handler(e.target.value));
   }
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('workflow-table', () => loadWorkflowTable(($('#workflowSearch')?.value || '').trim()), 12000);
+  }
 }
 
 async function loadWorkflowTable(search = '') {
@@ -442,15 +508,14 @@ async function loadWorkflowTable(search = '') {
     const procDays = r.latest_processing_days ?? 0;
     const tat = r.total_tat || 0;
     const actions = [];
-    actions.push(`<button class="icon-btn" title="View" onclick="window.location.href='workflow-details.php?id=${r.id}'">${userIcon('eye')}</button>`);
-    actions.push(`<button class="icon-btn" title="Edit" onclick="editWorkflow(${r.id})">${userIcon('edit')}</button>`);
-    actions.push(`<button class="icon-btn" title="Print" onclick="printWorkflow(${r.id})">${userIcon('printer')}</button>`);
+    actions.push(`<button class="icon-btn" title="Edit" onclick="event.stopPropagation();editWorkflow(${r.id})">${userIcon('edit')}</button>`);
+    actions.push(`<button class="icon-btn" title="Print" onclick="event.stopPropagation();printWorkflow(${r.id})">${userIcon('printer')}</button>`);
     if (isAdmin) {
-      actions.push(`<button class="icon-btn" title="Delete" onclick="deleteWorkflow(${r.id})">${userIcon('trash')}</button>`);
+      actions.push(`<button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteWorkflow(${r.id})">${userIcon('trash')}</button>`);
     }
-    return `<tr>
+    return `<tr style="cursor:pointer" title="Click to view details" onclick="window.location.href='workflow-details.php?id=${r.id}'">
       <td class="cell-mono">${r.application_no}</td>
-      <td>${r.applicant_name}</td>
+      <td class="cell-name" title="${r.applicant_name}">${r.applicant_name}</td>
       <td><span class="round-chip">Round ${r.current_round || 1}</span></td>
       <td>${lastIn}</td>
       <td>${lastOutHtml}</td>
@@ -485,7 +550,7 @@ async function editWorkflow(id) {
           <div class="form-group"><label>Date Paid</label><input class="form-control" type="date" id="editDatePaid" value="${r.date_paid || ''}"></div>
           <div class="form-group"><label>Released</label><input class="form-control" type="date" id="editReleased" value="${r.released || ''}"></div>
           <div class="form-group"><label>First In Date</label><input class="form-control" type="date" id="editFirstIn" value="${r.first_in || ''}"></div>
-          <div class="form-group"><label>Status</label><select class="form-control" id="editStatus"><option value="in-progress" ${r.status === 'in-progress' ? 'selected' : ''}>In Process</option><option value="completed" ${r.status === 'completed' ? 'selected' : ''}>Completed</option><option value="returned" ${r.status === 'returned' ? 'selected' : ''}>Returned</option><option value="approved" ${r.status === 'approved' ? 'selected' : ''}>Approved</option></select></div>
+          <div class="form-group"><label>Status</label><select class="form-control" id="editStatus"><option value="Pending" ${r.status === 'Pending' ? 'selected' : ''}>Pending</option><option value="Under Review" ${r.status === 'Under Review' ? 'selected' : ''}>Under Review</option><option value="Approved" ${r.status === 'Approved' ? 'selected' : ''}>Approved</option><option value="Disapproved" ${r.status === 'Disapproved' ? 'selected' : ''}>Disapproved</option><option value="Released" ${r.status === 'Released' ? 'selected' : ''}>Released</option></select></div>
         </div>
       </form>
     </div>
@@ -558,9 +623,9 @@ function openCreateWorkflowModal(onSuccess) {
           <div class="form-group"><label>Status <span class="req">*</span></label>
             <select class="form-control" id="newWorkflowStatus">
               <option value="">Select</option>
-              <option value="pending">Pending</option>
-              <option value="in-progress">Under Review</option>
-              <option value="approved">Approved</option>
+              <option value="Pending">Pending</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Approved">Approved</option>
             </select>
           </div>
         </div>
@@ -1248,6 +1313,10 @@ function initPermitApprovalRecordsPage() {
   });
 
   loadApprovalRecordsTable();
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('approval-records', loadApprovalRecordsTable, 12000);
+  }
 }
 
 async function loadApprovalRecordsTable() {
@@ -1316,6 +1385,10 @@ function initReleasingPage() {
   });
 
   loadRelTodayRecords();
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('releasing-today', loadRelTodayRecords, 12000);
+  }
 }
 
 async function loadRelTodayRecords() {
@@ -1347,6 +1420,10 @@ async function initReleasingRecordsPage() {
   $('#relRecordsExport')?.addEventListener('click', () => {
     window.open('../../api/index.php?module=export&action=csv&table=releasing', '_blank');
   });
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('releasing-records', loadReleasingRecordsTable, 12000);
+  }
 }
 
 async function loadReleasingRecordsTable() {
@@ -1402,65 +1479,54 @@ const MODULE_COLORS = {
   'system': '#e6a817'
 };
 
-async function initNotificationsPage() {
-  const tbody = $('#notifTbody');
-  if (!tbody) return;
-
-  const res = await apiGet('notifications', 'list').catch(() => ({ data: [] }));
-  const notifs = res.data || [];
-
-  tbody.innerHTML = notifs.map((n, i) => {
-    const label = MODULE_LABELS[n.module_name] || n.module_name || 'System';
-    const color = MODULE_COLORS[n.module_name] || 'var(--gray-400)';
-    return `
-    <tr class="${n.is_read ? '' : 'notif-unread'}" data-index="${i}" style="cursor:pointer;">
-      <td><span class="${n.is_read ? '' : 'unread-dot'}" style="${n.is_read ? 'opacity:0.3;' : ''}">${n.is_read ? '○' : '●'}</span></td>
-      <td><span class="badge" style="font-size:11px;background:${color};color:#fff;">${label}</span></td>
-      <td><strong>${n.title}</strong></td>
-      <td>${(n.message || '').substring(0, 80)}${(n.message || '').length > 80 ? '…' : ''}</td>
-      <td style="white-space:nowrap;">${n.created_at ? formatDate(n.created_at) : '—'}</td>
-    </tr>`;
-  }).join('');
-
-  tbody.querySelectorAll('tr').forEach((row, i) => {
-    row.addEventListener('click', async () => {
-      const n = notifs[i];
-      if (!n) return;
-      if (!n.is_read) {
-        await apiGet('notifications', 'mark-read', { id: n.id });
-      }
-      const label = MODULE_LABELS[n.module_name] || n.module_name || 'System';
-      const color = MODULE_COLORS[n.module_name] || 'var(--gray-400)';
-      openModal(`
-        <div class="modal-head">
-          <h3>${n.title}</h3>
-          <button class="icon-btn" data-close-modal aria-label="Close">${userIcon('x')}</button>
-        </div>
-        <div class="modal-body">
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:10px;align-items:center;">
-              <span class="badge badge-neutral" style="font-size:11px;background:${color};color:#fff;">${label}</span>
-              <span style="font-size:12px;color:var(--gray-400);">${n.created_at ? formatDate(n.created_at) : ''}</span>
-              ${n.is_read ? '' : '<span style="font-size:11px;color:var(--color-primary);font-weight:600;">● Unread</span>'}
-            </div>
-            <p style="font-size:14px;line-height:1.6;color:var(--gray-700);">${n.message}</p>
-            ${n.sender_name ? `<div style="font-size:12px;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:12px;">From <strong>${n.sender_name}</strong></div>` : ''}
-          </div>
-        </div>
-        <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Close</button></div>`);
-    });
-  });
-}
-
 /* ==========================================================================
    ANNOUNCEMENTS
    ========================================================================== */
+let _announcementsCache = [];
+
 async function initAnnouncementsPage() {
+  await loadAnnouncementsTable();
+
+  const pendingId = localStorage.getItem('pams_open_announcement');
+  if (pendingId) {
+    localStorage.removeItem('pams_open_announcement');
+    const ann = _announcementsCache.find(a => String(a.id) === String(pendingId));
+    if (ann) openAnnouncementModal(ann);
+  }
+
+  if (window.PAMS_REALTIME) {
+    window.PAMS_REALTIME.register('announcements-page', loadAnnouncementsTable, 20000);
+  }
+}
+
+function openAnnouncementModal(a) {
+  apiGet('notifications', 'mark-read', { record_id: a.id }).catch(() => {});
+  openModal(`
+    <div class="modal-head">
+      <h3>${a.title}</h3>
+      <button class="icon-btn" data-close-modal aria-label="Close">${userIcon('x')}</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span style="font-size:12px;color:var(--gray-400);">${a.created_at ? formatDate(a.created_at) : ''}</span>
+        </div>
+        <p style="font-size:14px;line-height:1.6;color:var(--gray-700);">${a.content}</p>
+        <div style="font-size:12px;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:12px;">
+          Posted by <strong>${a.posted_by_name || '—'}</strong>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Close</button></div>`);
+}
+
+async function loadAnnouncementsTable() {
   const tbody = $('#announcementsTbody');
   if (!tbody) return;
 
   const res = await apiGet('announcements', 'list').catch(() => ({ data: [] }));
   const announcements = res.data || [];
+  _announcementsCache = announcements;
 
   tbody.innerHTML = announcements.map((a, i) => `
     <tr style="cursor:pointer;" data-index="${i}">
@@ -1473,24 +1539,1006 @@ async function initAnnouncementsPage() {
     row.addEventListener('click', () => {
       const a = announcements[i];
       if (!a) return;
-      openModal(`
-        <div class="modal-head">
-          <h3>${a.title}</h3>
-          <button class="icon-btn" data-close-modal aria-label="Close">${userIcon('x')}</button>
-        </div>
-        <div class="modal-body">
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;gap:10px;align-items:center;">
-              <span style="font-size:12px;color:var(--gray-400);">${a.created_at ? formatDate(a.created_at) : ''}</span>
-            </div>
-            <p style="font-size:14px;line-height:1.6;color:var(--gray-700);">${a.content}</p>
-            <div style="font-size:12px;color:var(--gray-500);border-top:1px solid var(--gray-100);padding-top:12px;">
-              Posted by <strong>${a.posted_by_name || '—'}</strong>
-            </div>
-          </div>
-        </div>
-        <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Close</button></div>`);
+      openAnnouncementModal(a);
     });
+  });
+}
+
+/* ==========================================================================
+   INSPECTION MANAGEMENT
+   ========================================================================== */
+function initInspectionSchedulePage() {
+  const tbody = $('#inschTbody');
+  if (!tbody) return;
+  let page = 1;
+  const perPage = 10;
+
+  function resetForm() {
+    $('#inschId').value = '';
+    ['#inschAppNo', '#inschPermitNo', '#inschProjectTitle', '#inschLocation', '#inschApplicant', '#inschOwner', '#inschContact', '#inschRemarks'].forEach(s => { const el = $(s); if (el) el.value = ''; });
+    $('#inschDate').value = '';
+    $('#inschTime').value = '';
+    $('#inschInspector').value = '';
+    $('#inschStatus').value = 'Scheduled';
+    $('#scheduleFormTitle').textContent = 'New Schedule';
+    $('#inschSaveBtn').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Save Schedule';
+  }
+
+  async function loadSchedules() {
+    const params = { page, per_page: perPage };
+    const search = $('#inschSearch')?.value.trim() || '';
+    const status = $('#inschStatusFilter')?.value || '';
+    if (search) params.search = search;
+    if (status) params.status = status;
+    const res = await apiGet('inspection', 'schedules/list', params).catch(() => ({ data: [], total: 0 }));
+    const rows = res.data || [];
+    const total = res.total || 0;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td class="cell-mono">${escapeHtml(r.application_no)}</td>
+        <td><strong>${escapeHtml(r.project_title)}</strong>${r.permit_no ? `<br><span class="text-xs text-muted">${escapeHtml(r.permit_no)}</span>` : ''}</td>
+        <td>${escapeHtml(r.applicant_name)}</td>
+        <td>${r.scheduled_date ? formatDate(r.scheduled_date) : '—'}${r.scheduled_time ? ` <span class="text-xs text-muted">${r.scheduled_time}</span>` : ''}</td>
+        <td>${escapeHtml(r.inspector_name || '—')}</td>
+        <td>${statusBadge(r.status || 'Scheduled')}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" title="Start inspection" onclick="startInspection(${r.id})">${userIcon('edit')}</button>
+            <button class="icon-btn" title="Edit schedule" onclick="editSchedule(${r.id})">${userIcon('eye')}</button>
+            <button class="icon-btn" title="Delete" onclick="deleteSchedule(${r.id})">${userIcon('trash')}</button>
+          </div>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--gray-400);">No schedules found.</td></tr>';
+    const pi = $('#inschPageInfo');
+    if (pi) pi.textContent = total ? `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, total)} of ${total}` : 'No records';
+    $('#inschPrev').disabled = page <= 1;
+    $('#inschNext').disabled = page * perPage >= total;
+  }
+
+  $('#inschSaveBtn')?.addEventListener('click', async () => {
+    const id = $('#inschId')?.value;
+    const appNo = $('#inschAppNo')?.value.trim();
+    const title = $('#inschProjectTitle')?.value.trim();
+    const applicant = $('#inschApplicant')?.value.trim();
+    if (!appNo || !title || !applicant) {
+      showToast({ title: 'Incomplete form', message: 'Application No., Project Title, and Applicant are required.', type: 'warning' });
+      return;
+    }
+    const payload = {
+      application_no: appNo,
+      permit_no: $('#inschPermitNo')?.value.trim() || null,
+      project_title: title,
+      project_location: $('#inschLocation')?.value.trim() || null,
+      applicant_name: applicant,
+      owner_representative: $('#inschOwner')?.value.trim() || null,
+      contact_number: $('#inschContact')?.value.trim() || null,
+      scheduled_date: $('#inschDate')?.value || null,
+      scheduled_time: $('#inschTime')?.value || null,
+      inspector_id: $('#inschInspector')?.value || null,
+      status: $('#inschStatus')?.value || 'Scheduled',
+      remarks: $('#inschRemarks')?.value.trim() || null
+    };
+    const res = id
+      ? await apiPost('inspection', 'schedules/update', { ...payload, id })
+      : await apiPost('inspection', 'schedules/create', payload);
+    if (res.success) {
+      showToast({ title: 'Saved', message: res.message, type: 'success' });
+      resetForm();
+      loadSchedules();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+
+  $('#inschClearBtn')?.addEventListener('click', resetForm);
+  $('#inschRefreshBtn')?.addEventListener('click', loadSchedules);
+  $('#inschSearch')?.addEventListener('input', debounce(() => { page = 1; loadSchedules(); }, 250));
+  $('#inschStatusFilter')?.addEventListener('change', () => { page = 1; loadSchedules(); });
+  $('#inschPrev')?.addEventListener('click', () => { if (page > 1) { page--; loadSchedules(); } });
+  $('#inschNext')?.addEventListener('click', () => { page++; loadSchedules(); });
+
+  loadSchedules();
+}
+
+function fillScheduleForm(r) {
+  $('#inschId').value = r.id;
+  $('#inschAppNo').value = r.application_no || '';
+  $('#inschPermitNo').value = r.permit_no || '';
+  $('#inschProjectTitle').value = r.project_title || '';
+  $('#inschLocation').value = r.project_location || '';
+  $('#inschApplicant').value = r.applicant_name || '';
+  $('#inschOwner').value = r.owner_representative || '';
+  $('#inschContact').value = r.contact_number || '';
+  $('#inschDate').value = r.scheduled_date || '';
+  $('#inschTime').value = r.scheduled_time || '';
+  $('#inschInspector').value = r.inspector_id || '';
+  $('#inschStatus').value = r.status || 'Scheduled';
+  $('#inschRemarks').value = r.remarks || '';
+  $('#scheduleFormTitle').textContent = 'Edit Schedule';
+  $('#inschSaveBtn').innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Update Schedule';
+}
+
+async function editSchedule(id) {
+  const res = await apiGet('inspection', 'schedules/list', { id, per_page: 100 });
+  const r = Array.isArray(res.data) ? res.data.find(d => d.id == id) : null;
+  if (!r) { showToast({ title: 'Not found', message: 'Schedule not found.', type: 'danger' }); return; }
+  fillScheduleForm(r);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteSchedule(id) {
+  openConfirm({
+    title: 'Delete schedule?',
+    message: 'This inspection schedule will be permanently removed.',
+    confirmLabel: 'Delete',
+    onConfirm: async () => {
+      const res = await apiPost('inspection', 'schedules/delete', { id });
+      closeModal();
+      if (res.success) { showToast({ title: 'Deleted', message: 'Schedule removed.', type: 'success' }); initInspectionSchedulePage(); }
+      else showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+}
+
+function startInspection(id) {
+  window.location.href = 'inspection-checklist.php?schedule_id=' + id;
+}
+
+/* --------------------------------------------------------------------------
+   Signature pad helper (mouse / touch / stylus)
+   -------------------------------------------------------------------------- */
+function initSignaturePad(canvasEl) {
+  if (!canvasEl) return null;
+  const ctx = canvasEl.getContext('2d');
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#1f2937';
+  let drawing = false;
+
+  function point(e) {
+    const r = canvasEl.getBoundingClientRect();
+    const p = e.touches && e.touches[0] ? e.touches[0] : e;
+    return {
+      x: (p.clientX - r.left) * (canvasEl.width / r.width),
+      y: (p.clientY - r.top) * (canvasEl.height / r.height)
+    };
+  }
+
+  canvasEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    drawing = true;
+    canvasEl.setPointerCapture(e.pointerId);
+    const p = point(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+  });
+  canvasEl.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const p = point(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  const stop = () => { drawing = false; };
+  canvasEl.addEventListener('pointerup', stop);
+  canvasEl.addEventListener('pointercancel', stop);
+  canvasEl.addEventListener('pointerleave', stop);
+
+  return {
+    clear() { ctx.clearRect(0, 0, canvasEl.width, canvasEl.height); },
+    isEmpty() {
+      const d = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height).data;
+      for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
+      return true;
+    },
+    toDataURL() { return canvasEl.toDataURL('image/png'); }
+  };
+}
+
+/* --------------------------------------------------------------------------
+   Inline modal helpers (for report / detail modals declared in page markup)
+   -------------------------------------------------------------------------- */
+function bindInlineModal(modalId) {
+  const wrap = $(modalId);
+  if (!wrap) return;
+  wrap.addEventListener('click', (e) => {
+    if (e.target.matches('.backdrop') || e.target.closest('[data-close-modal]')) {
+      wrap.classList.remove('open');
+      document.body.classList.remove('modal-open');
+      document.body.style.overflow = '';
+    }
+  });
+}
+function openInlineModal(modalId) {
+  const w = $(modalId);
+  if (w) {
+    w.classList.add('open');
+    document.body.classList.add('modal-open');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Shared render helpers for inspection checklist / report documents
+   -------------------------------------------------------------------------- */
+const INSPECTION_STATUS_FLOW = ['Draft', 'Under Review', 'Approved', 'Completed'];
+
+function imgPath(p) {
+  return p ? ('../../' + p) : '';
+}
+
+function renderChecklistResultTable(results, editable, opts) {
+  const byCat = {};
+  (results || []).forEach(r => {
+    (byCat[r.category] = byCat[r.category] || []).push(r);
+  });
+  const cats = Object.keys(byCat);
+  const pass = (results || []).filter(r => r.result === 'Pass').length;
+  const fail = (results || []).filter(r => r.result === 'Fail').length;
+  const na = (results || []).filter(r => r.result === 'N/A').length;
+
+  const markFor = (r) => {
+    if (r.item_type === 'checkbox') {
+      return r.result === 'Pass'
+        ? '<span class="badge badge-success">✓</span>'
+        : '<span class="badge badge-neutral">✗</span>';
+    }
+    return r.result === 'Pass' ? '<span class="badge badge-success">Pass</span>'
+      : r.result === 'Fail' ? '<span class="badge badge-danger">Fail</span>'
+      : '<span class="badge badge-neutral">N/A</span>';
+  };
+
+  const isSb = (r) => r.item_type === 'checkbox' && String(r.item_text).indexOf('Setbacks - ') === 0;
+
+  return {
+    html: cats.map(cat => {
+      const items = byCat[cat];
+      const setbacks = items.filter(isSb);
+      const others = items.filter(r => !isSb(r));
+      let rows = '';
+      if (setbacks.length) {
+        const cells = setbacks.map(r => `<td class="sb-report-cell"><strong>${escapeHtml(String(r.item_text).replace(/^Setbacks\s*-\s*/, ''))}</strong><div>${markFor(r)}</div>${r.remarks ? `<div class="text-xs text-muted">${escapeHtml(r.remarks)}</div>` : ''}</td>`).join('');
+        rows += `<tr class="sb-report-row"><td class="k"><strong>Setbacks</strong></td>${cells}</tr>`;
+      }
+      rows += others.map(r => `<tr>
+        <td>${escapeHtml(r.item_text)}${r.remarks ? `<div class="text-xs text-muted">${escapeHtml(r.remarks)}</div>` : ''}</td>
+        <td style="text-align:center;width:110px;">${markFor(r)}</td>
+      </tr>`).join('');
+      const pct = (opts && opts.mechAccomplishment != null && cat === 'Mechanical Works')
+        ? `<span class="mech-pct">% Mechanical: <strong>${escapeHtml(String(opts.mechAccomplishment))}%</strong></span>`
+        : '';
+      return `<div class="checklist-cat">
+        <div class="checklist-cat-head"><h4>${escapeHtml(cat)}</h4>${pct}</div>
+        <table class="checklist-table"><thead><tr><th>Inspection Item</th><th style="width:110px;text-align:center;">Result</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    }).join(''),
+    summary: `${results.length} item${results.length === 1 ? '' : 's'} · <b>${pass}</b> Pass, <b>${fail}</b> Fail, <b>${na}</b> N/A`
+  };
+}
+
+function renderSignatureCell(rec, field) {
+  const map = {
+    inspector:  { sig: rec.inspector_signature,  name: rec.inspector_name,  date: rec.inspection_date,  label: 'Inspector' },
+    reviewer:   { sig: rec.review_signature,     name: rec.reviewed_by_name, date: rec.review_date,      label: 'Reviewed By' },
+    approver:   { sig: rec.approval_signature,   name: rec.approved_by_name, date: rec.approval_date,    label: 'Approved By' }
+  };
+  const m = map[field];
+  if (!m) return '';
+  return `<div class="report-sig">
+    <div class="report-sig-line">${m.sig ? `<img class="sig-img" src="${imgPath(m.sig)}" alt="signature">` : '&nbsp;'}</div>
+    <div class="report-sig-name">${escapeHtml(m.name || '—')}</div>
+    <div class="report-sig-label">${m.label}${m.date ? ` · ${formatDate(m.date)}` : ''}</div>
+  </div>`;
+}
+
+function renderReportDoc(rec) {
+  const groupBy = (list) => {
+    const g = {};
+    (list || []).forEach(r => { (g[r.category] = g[r.category] || []).push(r); });
+    return g;
+  };
+  const resultsByCat = groupBy(rec.results);
+  const xf = rec.extra_fields || {};
+  const xfSb = xf.setbacks || {};
+  const xfPct = xf.pct || {};
+  const xfRem = xf.remarks || {};
+
+  const catOrder = ['General Safety', 'Architectural Works', 'Civil / Structural Works', 'Electrical Works', 'Mechanical Works', 'Sanitary / Plumbing Works', 'Electronics Works'];
+
+  const catStatus = (cat) => {
+    const items = resultsByCat[cat] || [];
+    if (!items.length) return '—';
+    let hasFail = false, allPass = true, anyPass = false;
+    items.forEach(r => {
+      if (r.result === 'Fail') hasFail = true;
+      if (r.result === 'Pass') anyPass = true; else allPass = false;
+    });
+    if (hasFail) return 'FAILED';
+    if (allPass && anyPass) return 'PASSED';
+    if (anyPass) return 'ONGOING';
+    return '—';
+  };
+
+  const catFindings = (cat) => {
+    const bits = [];
+    const pctVal = cat === 'Mechanical Works'
+      ? (xfPct[cat] != null ? xfPct[cat] : rec.mech_accomplishment)
+      : xfPct[cat];
+    if (pctVal != null && pctVal !== '') bits.push(`${escapeHtml(String(pctVal))}%`);
+    if (cat === 'Architectural Works') {
+      const sb = ['Front', 'Rear', 'Right Side', 'Left Side'].map(k => xfSb[k] ? `${escapeHtml(k)} ${escapeHtml(xfSb[k])}m` : '').filter(Boolean).join(', ');
+      if (sb) bits.push(`Setbacks: ${sb}`);
+    }
+    if (cat === 'Civil / Structural Works') {
+      if (xf.floorLevel) bits.push(`Floor: ${escapeHtml(xf.floorLevel)}`);
+      if (xf.others) bits.push(`Others: ${escapeHtml(xf.others)}`);
+    }
+    return bits.length ? bits.join(' · ') : '—';
+  };
+
+  const catRows = catOrder.map(cat => {
+    const rem = (xfRem[cat] || '').split('\n').map(l => escapeHtml(l)).join('<br>');
+    return `<tr>
+      <td class="k">${escapeHtml(cat)}</td>
+      <td class="v">${catFindings(cat)}</td>
+      <td class="v">${rem || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const resultRadio = (label) => {
+    const on = rec.inspection_result === label;
+    return `<label class="rpt-check ${on ? 'on' : ''}"><span class="box">${on ? '☑' : '☐'}</span> ${escapeHtml(label)}</label>`;
+  };
+
+  const photosHtml = (rec.photos || []).map(p =>
+    `<div class="report-photo"><img src="${imgPath(p.file_path)}" alt="site photo"><div class="text-xs text-muted">${escapeHtml(p.caption || '')}</div></div>`
+  ).join('');
+
+  const sigBlock = (field, name, title, date) => {
+    const sig = field === 'inspector' ? rec.inspector_signature
+      : field === 'reviewer' ? (rec.review_signature || rec.approval_signature) : '';
+    const dateText = field === 'inspector' ? rec.inspection_date
+      : field === 'reviewer' ? (rec.review_date || rec.approval_date) : null;
+    return `<div class="rpt-sig">
+      <div class="rpt-sig-head">${field === 'inspector' ? 'INSPECTED BY' : 'REVIEWED &amp; NOTED BY'}</div>
+      <div class="rpt-sig-line">${sig ? `<img class="sig-img" src="${imgPath(sig)}" alt="signature">` : '&nbsp;'}</div>
+      <div class="rpt-sig-name">${escapeHtml(name || '______________________')}</div>
+      <div class="rpt-sig-title">${escapeHtml(title || '')}</div>
+      <div class="rpt-sig-date">Date: ${dateText ? formatDate(dateText) : '______________'}</div>
+    </div>`;
+  };
+
+  const today = formatDate(new Date());
+
+  return `
+    <div class="rpt-head">
+      <div class="rpt-logo left"><img src="../../assets/images/GENSAN LOGO.png" alt="City Logo"></div>
+      <div class="rpt-title">
+        <div class="rpt-rep">REPUBLIC OF THE PHILIPPINES</div>
+        <div class="rpt-city">General Santos City</div>
+        <div class="rpt-office">Office of The Building Official</div>
+        <div class="rpt-doc">MONITORING REPORT</div>
+      </div>
+      <div class="rpt-logo right"><img src="../../assets/images/OBO LOGO.png" alt="Office Logo"></div>
+    </div>
+
+    <table class="rpt-info">
+      <tr><td class="k">Permit No.</td><td class="v">${escapeHtml(rec.permit_no || '—')}</td><td class="k">Application No.</td><td class="v">${escapeHtml(rec.application_no || '—')}</td></tr>
+      <tr><td class="k">Owner / Applicant</td><td class="v">${escapeHtml(rec.owner_representative || '—')}</td><td class="k">Contact No.</td><td class="v">${escapeHtml(rec.contact_number || '—')}</td></tr>
+      <tr><td class="k">Project Title</td><td class="v" colspan="3">${escapeHtml(rec.project_title || '—')}</td></tr>
+      <tr><td class="k">Project Address</td><td class="v" colspan="3">${escapeHtml(rec.project_location || '—')}</td></tr>
+      <tr><td class="k">Contractor</td><td class="v">${escapeHtml(rec.project_contractor || '—')}</td><td class="k">Project Engineer</td><td class="v">${escapeHtml(rec.project_engineer || '—')}</td></tr>
+      <tr><td class="k">Inspection Type</td><td class="v">${escapeHtml(rec.inspection_type || '—')}</td><td class="k">Inspection Date</td><td class="v">${rec.inspection_date ? formatDate(rec.inspection_date) : '—'}</td></tr>
+      <tr><td class="k">Time Started</td><td class="v">${escapeHtml(rec.time_started || '—')}</td><td class="k">Time Finished</td><td class="v">${escapeHtml(rec.time_finished || '—')}</td></tr>
+      <tr><td class="k">Physical Progress</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
+    </table>
+
+    <table class="rpt-cat">
+      <thead><tr><th>Category</th><th>Findings</th><th>Remarks</th></tr></thead>
+      <tbody>${catRows}</tbody>
+    </table>
+
+    <div class="rpt-block">
+      <div class="rpt-block-title">SUMMARY OF INSPECTION</div>
+      <div class="rpt-block-body">${escapeHtml(rec.overall_findings || '')}</div>
+    </div>
+
+    <div class="rpt-block">
+      <div class="rpt-block-title">RECOMMENDATIONS</div>
+      <div class="rpt-block-body">${escapeHtml(rec.recommendations || '')}</div>
+    </div>
+
+    <div class="rpt-block">
+      <div class="rpt-block-title">INSPECTION RESULT</div>
+      <div class="rpt-result">
+        ${resultRadio('Passed')}
+        ${resultRadio('Passed with Remarks')}
+        ${resultRadio('Ongoing')}
+        ${resultRadio('Failed')}
+        ${resultRadio('For Re-inspection')}
+      </div>
+    </div>
+
+    ${photosHtml ? `<div class="rpt-block">
+      <div class="rpt-block-title">ATTACHED INSPECTION PHOTOS</div>
+      <div class="rpt-photos">${photosHtml}</div>
+    </div>` : ''}
+
+    <div class="rpt-signatures">
+      ${sigBlock('inspector', rec.inspector_name, 'Building Inspector', rec.inspection_date)}
+      ${sigBlock('reviewer', rec.reviewed_by_name, 'Building Official / Supervisor', rec.review_date)}
+    </div>
+
+    <div class="rpt-foot">
+      <span>Document No.: ${escapeHtml(rec.inspection_no || '—')}</span>
+      <span>Printed Date: ${today}</span>
+      <span class="rpt-foot-gen">Generated by Permit Monitoring System</span>
+      <span>Page 1 of 1</span>
+    </div>
+  `;
+}
+
+/* --------------------------------------------------------------------------
+   INSPECTION CHECKLIST page
+   -------------------------------------------------------------------------- */
+async function initInspectionChecklistPage() {
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+  const fromSchedule = params.get('schedule_id');
+
+  let recordId = editId ? parseInt(editId, 10) : null;
+  let record = null;
+  let status = 'Draft';
+
+  const canManage = () => getPermSet().has('inspection-edit');
+
+  const sigPad = initSignaturePad($('#inschSignatureCanvas'));
+  const reviewPad = initSignaturePad($('#inschReviewCanvas'));
+  const $form = $('#inschForm');
+  const resultsBody = $('#inschResultsBody');
+
+  const canEdit = () => ['Draft', 'Rejected'].indexOf(status) !== -1;
+
+  function setStatusUI() {
+    const pill = $('#inschStatusPill');
+    if (pill) pill.innerHTML = statusBadge(status);
+
+    const editable = canEdit();
+    $form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = !editable);
+    resultsBody.querySelectorAll('input, textarea').forEach(el => el.disabled = !editable);
+    $('#inschSigClear') && ($('#inschSigClear').style.display = editable ? '' : 'none');
+    const sigCanvas = $('#inschSignatureCanvas');
+    if (sigCanvas) sigCanvas.style.pointerEvents = editable ? '' : 'none';
+    const photoDrop = $('#inschPhotoDrop');
+    if (photoDrop) photoDrop.style.pointerEvents = editable ? '' : 'none';
+    const photoInput = $('#inschPhotoInput');
+    if (photoInput) photoInput.disabled = !editable;
+
+    $('#inschSaveBtn').style.display = editable ? '' : 'none';
+    $('#inschSubmitBtn').style.display = (editable && recordId) ? '' : 'none';
+    $('#inschPrintBtn').style.display = '';
+
+    const reviewCard = $('#inschReviewCard');
+    const approveBtn = $('#inschApproveBtn');
+    const rejectBtn = $('#inschRejectBtn');
+    if (canManage() && status === 'Under Review') {
+      reviewCard.style.display = '';
+      $('#inschReviewTitle').textContent = 'Review · Sign to Approve';
+      approveBtn.style.display = '';
+      approveBtn.textContent = 'Approve & Sign';
+      approveBtn.dataset.action = 'review';
+      rejectBtn.style.display = '';
+    } else if (canManage() && status === 'Approved') {
+      reviewCard.style.display = '';
+      $('#inschReviewTitle').textContent = 'Final Approval · Sign to Complete';
+      approveBtn.style.display = '';
+      approveBtn.textContent = 'Complete & Sign';
+      approveBtn.dataset.action = 'approve';
+      rejectBtn.style.display = 'none';
+    } else {
+      reviewCard.style.display = 'none';
+      approveBtn.style.display = 'none';
+      rejectBtn.style.display = 'none';
+    }
+  }
+
+  function setSignatureStates() {
+    const saved = $('#inschSignatureSaved');
+    if (record && record.inspector_signature) {
+      saved.style.display = '';
+      saved.innerHTML = `<img class="sig-img" src="${imgPath(record.inspector_signature)}" alt="signature">`;
+      $('#inschSigHint').style.display = 'none';
+    } else {
+      saved.style.display = 'none';
+      $('#inschSigHint').style.display = '';
+    }
+  }
+
+  function renderResults(rec) {
+    const template = rec.template;
+    const existing = rec.results || [];
+    const byTpl = {};
+    existing.forEach(r => { byTpl[r.template_item_id] = r; });
+    const xf = rec.extra_fields || {};
+    const sb = xf.setbacks || {};
+    const pct = xf.pct || {};
+    const remarks = xf.remarks || {};
+
+    const cats = rec.categories || [];
+    resultsBody.innerHTML = cats.map(cat => {
+      const items = (template[cat] || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      if (!items.length) return '';
+
+      let rows = '';
+
+      if (cat === 'Architectural Works') {
+        const sbFields = ['Front', 'Rear', 'Right Side', 'Left Side'];
+        const sbCells = sbFields.map(k =>
+          `<div class="sb-text-field"><label>${escapeHtml(k)}</label>
+             <input type="text" class="form-control form-control-sm" data-sb-text="${escapeHtml(k)}" placeholder="(m)" value="${escapeHtml(sb[k] || '')}">
+           </div>`).join('');
+        rows += `<tr class="sb-text-row" data-cat="${escapeHtml(cat)}">
+          <td colspan="3"><div class="sb-text-cells"><span class="sb-text-head"><strong>Setbacks</strong></span>${sbCells}</div></td>
+        </tr>`;
+      }
+
+      if (cat === 'Civil / Structural Works') {
+        rows += `<tr class="floor-level-row" data-cat="${escapeHtml(cat)}">
+          <td colspan="3"><div class="sb-text-cells"><span class="sb-text-head"><strong>Completed Floor Level</strong></span>
+            <input type="text" class="form-control form-control-sm" data-floor-level placeholder="e.g. 2nd Floor" value="${escapeHtml(xf.floorLevel || '')}">
+          </div></td>
+        </tr>`;
+      }
+
+      rows += items.map(it => {
+        const prev = byTpl[it.id] || {};
+        const isOthers = String(it.item_text) === 'Others';
+        const othersInput = isOthers
+          ? `<input type="text" class="form-control form-control-sm others-line" data-others placeholder="Specify" value="${escapeHtml(xf.others || '')}">`
+          : '';
+        return `<tr data-tpl="${it.id}" data-cat="${escapeHtml(cat)}" data-item="${escapeHtml(it.item_text)}" data-type="checkbox">
+          <td>${escapeHtml(it.item_text)}${othersInput}</td>
+          <td class="col-result col-check"><input type="checkbox" data-cb="${it.id}" ${(prev.result || 'N/A') === 'Pass' ? 'checked' : ''}></td>
+          <td class="col-remarks"></td>
+        </tr>`;
+      }).join('');
+
+      const pctDefault = cat === 'Mechanical Works'
+        ? (pct[cat] != null ? pct[cat] : (rec.mech_accomplishment != null ? rec.mech_accomplishment : ''))
+        : (pct[cat] || '');
+      const pctInput = `<label>Percent (%)</label>
+          <input type="number" class="form-control form-control-sm" data-cat-pct="${escapeHtml(cat)}" min="0" max="100" step="any" placeholder="%" value="${escapeHtml(String(pctDefault))}">`;
+
+      return `<div class="checklist-cat">
+        <div class="checklist-cat-head"><h4>${escapeHtml(cat)}</h4><span class="cat-pct">${pctInput}</span></div>
+        <table class="checklist-table"><thead><tr><th>Inspection Item</th><th class="col-result">Compliance</th><th class="col-remarks"></th></tr></thead><tbody>${rows}</tbody></table>
+        <div class="cat-remark-wrap"><label>Remark/s</label>
+          <textarea class="form-control cat-remark" data-cat-remarks="${escapeHtml(cat)}" rows="2" placeholder="Remark/s">${escapeHtml(remarks[cat] || '')}</textarea>
+        </div>
+      </div>`;
+    }).join('') || '<div class="section-hint">No checklist template items configured.</div>';
+  }
+
+  function collectResults() {
+    const arr = [];
+    resultsBody.querySelectorAll('tr[data-tpl]').forEach(tr => {
+      const cb = tr.querySelector('input[data-cb]');
+      arr.push({
+        template_item_id: parseInt(tr.dataset.tpl, 10),
+        category: tr.dataset.cat,
+        item_text: tr.dataset.item,
+        item_type: 'checkbox',
+        result: cb && cb.checked ? 'Pass' : 'N/A',
+        remarks: ''
+      });
+    });
+    return arr;
+  }
+
+  function collectExtraFields() {
+    const xf = { setbacks: {}, pct: {}, remarks: {} };
+    resultsBody.querySelectorAll('input[data-sb-text]').forEach(el => {
+      const v = el.value.trim();
+      if (v !== '') xf.setbacks[el.dataset.sbText] = v;
+    });
+    const fl = resultsBody.querySelector('[data-floor-level]');
+    if (fl && fl.value.trim() !== '') xf.floorLevel = fl.value.trim();
+    const oth = resultsBody.querySelector('[data-others]');
+    if (oth && oth.value.trim() !== '') xf.others = oth.value.trim();
+    resultsBody.querySelectorAll('input[data-cat-pct]').forEach(el => {
+      const v = el.value.trim();
+      if (v !== '') xf.pct[el.dataset.catPct] = v;
+    });
+    resultsBody.querySelectorAll('textarea[data-cat-remarks]').forEach(el => {
+      const v = el.value.trim();
+      if (v !== '') xf.remarks[el.dataset.catRemarks] = v;
+    });
+    return xf;
+  }
+
+  function updateSummary() {
+    const el = $('#inschResultsSummary');
+    if (!el) return;
+    const arr = collectResults();
+    const pass = arr.filter(r => r.result === 'Pass').length;
+    const fail = arr.filter(r => r.result === 'Fail').length;
+    const na = arr.filter(r => r.result === 'N/A').length;
+    el.innerHTML = `${arr.length} items · <b>${pass}</b> Pass, <b>${fail}</b> Fail, <b>${na}</b> N/A`;
+  }
+
+  function fillForm(rec) {
+    const set = (sel, val) => { const el = $(sel); if (el) el.value = val == null ? '' : val; };
+    $('#inschId').value = rec.id || '';
+    $('#inschScheduleId').value = rec.schedule_id || '';
+    $('#inschInspectionNo').value = rec.inspection_no || '';
+    set('#inschAppNo', rec.application_no);
+    set('#inschPermitNo', rec.permit_no);
+    set('#inschDateIssued', rec.permit_date_issued);
+    set('#inschProjectTitle', rec.project_title);
+    set('#inschLocation', rec.project_location);
+    set('#inschOwner', rec.owner_representative);
+    set('#inschContact', rec.contact_number);
+    set('#inschContractor', rec.project_contractor);
+    set('#inschEngineer', rec.project_engineer);
+    set('#inschTeam', rec.inspection_team);
+    set('#inschDate', rec.inspection_date);
+    set('#inschInspectionType', rec.inspection_type);
+    set('#inschTimeStart', rec.time_started);
+    set('#inschTimeEnd', rec.time_finished);
+    const resRadio = $('input[name="inschResult"]');
+    if (resRadio) {
+      resRadio.checked = resRadio.value === (rec.inspection_result || '');
+    }
+    set('#inschPhysical', rec.physical_accomplishment != null ? rec.physical_accomplishment : '');
+    set('#inschFindings', rec.overall_findings);
+    set('#inschRecommendations', rec.recommendations);
+  }
+
+  function loadPhotos() {
+    const listEl = $('#inschPhotoList');
+    if (!listEl) return;
+    const photos = (record && record.photos) ? record.photos : [];
+    const removable = canEdit();
+    listEl.innerHTML = photos.map(p => `
+      <div class="photo-thumb">
+        <img src="${imgPath(p.file_path)}" alt="site photo">
+        <div class="photo-thumb-meta">${escapeHtml(p.caption || '')}</div>
+        ${removable ? `<button type="button" class="icon-btn photo-thumb-remove" title="Remove" onclick="removeInspectionPhoto(${p.id})">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>` : ''}
+      </div>`).join('') || '<span class="text-xs text-muted">No site photos attached.</span>';
+  }
+
+  async function refreshRecord() {
+    if (!recordId) return;
+    const [recRes, tplRes] = await Promise.all([
+      apiGet('inspection', 'checklist/get', { id: recordId }).catch(() => null),
+      apiGet('inspection', 'template').catch(() => null)
+    ]);
+    if (recRes && recRes.success) {
+      record = recRes.data;
+      record.template = (tplRes && tplRes.success) ? tplRes.data : {};
+      record.categories = (tplRes && tplRes.success) ? tplRes.categories : [];
+      status = record.status;
+      fillForm(record);
+      renderResults(record);
+      setStatusUI();
+      setSignatureStates();
+      loadPhotos();
+      updateSummary();
+    }
+  }
+
+  $('#inschSaveBtn') && $('#inschSaveBtn').addEventListener('click', async () => {
+    const title = $('#inschProjectTitle').value.trim();
+    const date = $('#inschDate').value;
+    if (!title || !date) {
+      showToast({ title: 'Incomplete form', message: 'Project Title and Date Inspected are required.', type: 'warning' });
+      return;
+    }
+    const mechEl = resultsBody.querySelector('input[data-cat-pct="Mechanical Works"]');
+    const resRadioChecked = $('input[name="inschResult"]:checked');
+    const payload = {
+      application_no: ($('#inschAppNo')?.value || '').trim(),
+      permit_no: $('#inschPermitNo').value.trim() || null,
+      permit_date_issued: $('#inschDateIssued').value || null,
+      project_title: title,
+      project_location: $('#inschLocation').value.trim() || null,
+      owner_representative: $('#inschOwner').value.trim() || null,
+      contact_number: $('#inschContact').value.trim() || null,
+      project_contractor: $('#inschContractor').value.trim() || null,
+      project_engineer: $('#inschEngineer').value.trim() || null,
+      inspection_team: $('#inschTeam').value.trim() || null,
+      inspection_date: date,
+      inspection_type: $('#inschInspectionType').value.trim() || null,
+      inspection_result: resRadioChecked ? resRadioChecked.value : null,
+      time_started: $('#inschTimeStart').value || null,
+      time_finished: $('#inschTimeEnd').value || null,
+      physical_accomplishment: $('#inschPhysical').value || null,
+      mech_accomplishment: (mechEl && mechEl.value !== '') ? mechEl.value : null,
+      extra_fields: collectExtraFields(),
+      overall_findings: $('#inschFindings').value.trim() || null,
+      recommendations: $('#inschRecommendations').value.trim() || null,
+      schedule_id: $('#inschScheduleId').value || null,
+      inspector_signature: sigPad && !sigPad.isEmpty() ? sigPad.toDataURL() : null,
+      results: collectResults()
+    };
+    const res = recordId
+      ? await apiPost('inspection', 'checklist/update', { ...payload, id: recordId })
+      : await apiPost('inspection', 'checklist/create', payload);
+    if (res.success) {
+      recordId = parseInt(res.id, 10);
+      showToast({ title: 'Saved', message: res.message, type: 'success' });
+      await refreshRecord();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+
+  $('#inschSubmitBtn') && $('#inschSubmitBtn').addEventListener('click', async () => {
+    if (!recordId) { showToast({ title: 'Save first', message: 'Save the draft before submitting.', type: 'warning' }); return; }
+    const res = await apiPost('inspection', 'checklist/submit', { id: recordId });
+    if (res.success) { showToast({ title: 'Submitted', message: res.message, type: 'success' }); await refreshRecord(); }
+    else showToast({ title: 'Error', message: res.error, type: 'danger' });
+  });
+
+  $('#inschApproveBtn') && $('#inschApproveBtn').addEventListener('click', async () => {
+    const action = $('#inschApproveBtn').dataset.action;
+    if (!recordId || (action !== 'review' && action !== 'approve')) return;
+    if (!reviewPad || reviewPad.isEmpty()) {
+      showToast({ title: 'Signature required', message: 'Please affix your handwritten signature.', type: 'warning' });
+      return;
+    }
+    const res = await apiPost('inspection', action === 'review' ? 'checklist/review' : 'checklist/approve', {
+      id: recordId,
+      signature: reviewPad.toDataURL(),
+      remarks: ''
+    });
+    if (res.success) {
+      showToast({ title: 'Done', message: res.message, type: 'success' });
+      reviewPad.clear();
+      $('#inschReviewRemarks').value = '';
+      await refreshRecord();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+
+  $('#inschRejectBtn') && $('#inschRejectBtn').addEventListener('click', async () => {
+    if (!recordId) return;
+    if (!reviewPad || reviewPad.isEmpty()) {
+      showToast({ title: 'Signature required', message: 'Please affix your handwritten signature.', type: 'warning' });
+      return;
+    }
+    const remarks = $('#inschReviewRemarks').value.trim();
+    if (!remarks) {
+      showToast({ title: 'Rejection reason required', message: 'Please enter a remark explaining the rejection.', type: 'warning' });
+      return;
+    }
+    const res = await apiPost('inspection', 'checklist/review', { id: recordId, signature: reviewPad.toDataURL(), remarks });
+    if (res.success) {
+      showToast({ title: 'Rejected', message: res.message, type: 'success' });
+      reviewPad.clear();
+      $('#inschReviewRemarks').value = '';
+      await refreshRecord();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+
+  $('#inschSigClear') && $('#inschSigClear').addEventListener('click', () => sigPad && sigPad.clear());
+  $('#inschReviewSigClear') && $('#inschReviewSigClear').addEventListener('click', () => reviewPad && reviewPad.clear());
+  $('#inschPrintBtn') && $('#inschPrintBtn').addEventListener('click', () => window.print());
+
+  resultsBody.addEventListener('change', updateSummary);
+  window.addEventListener('insch-photos-changed', () => { refreshRecord(); });
+
+  const photoInput = $('#inschPhotoInput');
+  const photoDrop = $('#inschPhotoDrop');
+  if (photoDrop) photoDrop.addEventListener('click', () => photoInput && photoInput.click());
+  if (photoInput) photoInput.addEventListener('change', async () => {
+    const files = Array.from(photoInput.files || []);
+    if (!files.length || !recordId) {
+      if (!recordId) showToast({ title: 'Save first', message: 'Save the inspection record before attaching photos.', type: 'warning' });
+      return;
+    }
+    photoInput.value = '';
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('inspection_id', recordId);
+      fd.append('caption', '');
+      fd.append('photo', file);
+      const res = await apiPost('inspection', 'photos/upload', fd, true).catch(() => ({ success: false, error: 'Upload failed.' }));
+      if (!res.success) { showToast({ title: 'Upload error', message: res.error, type: 'danger' }); break; }
+    }
+    await refreshRecord();
+  });
+
+  if (editId) {
+    await refreshRecord();
+  } else {
+    if (fromSchedule) {
+      const res = await apiGet('inspection', 'schedules/list', { id: fromSchedule, per_page: 100 }).catch(() => null);
+      const s = res && res.success ? (res.data || []).find(d => d.id == fromSchedule) : null;
+      if (s) {
+        fillForm({
+          application_no: s.application_no, permit_no: s.permit_no,
+          project_title: s.project_title, project_location: s.project_location,
+          owner_representative: s.applicant_name, contact_number: s.contact_number,
+          inspection_date: s.scheduled_date, time_started: s.scheduled_time,
+          schedule_id: s.id
+        });
+      }
+    }
+    const tplRes = await apiGet('inspection', 'template').catch(() => null);
+    record = {
+      id: null,
+      schedule_id: fromSchedule || null,
+      template: (tplRes && tplRes.success) ? tplRes.data : {},
+      categories: (tplRes && tplRes.success) ? tplRes.categories : [],
+      results: [],
+      photos: []
+    };
+    renderResults(record);
+    setStatusUI();
+    updateSummary();
+  }
+}
+
+async function removeInspectionPhoto(photoId) {
+  const res = await apiPost('inspection', 'photos/remove', { id: photoId });
+  if (res.success) {
+    showToast({ title: 'Removed', message: 'Photo removed.', type: 'success' });
+    window.dispatchEvent(new Event('insch-photos-changed'));
+  } else {
+    showToast({ title: 'Error', message: res.error, type: 'danger' });
+  }
+}
+
+/* --------------------------------------------------------------------------
+   INSPECTION REPORTS page
+   -------------------------------------------------------------------------- */
+function fitReportToPage() {
+  const doc = $('#insrReportBody');
+  if (!doc || !doc.children.length) return;
+  const PRINT_W = 816;
+  const PRINT_H = 1344;
+  doc.style.zoom = '1';
+  doc.style.width = PRINT_W + 'px';
+  const naturalH = doc.scrollHeight;
+  const Z = Math.min(1, PRINT_H / Math.max(1, naturalH));
+  doc.style.zoom = Z.toFixed(4);
+  doc.style.width = (PRINT_W / Z) + 'px';
+}
+
+function resetReportFit() {
+  const doc = $('#insrReportBody');
+  if (!doc) return;
+  doc.style.zoom = '';
+  doc.style.width = '';
+}
+
+async function initInspectionReportsPage() {
+  const tbody = $('#insrTbody');
+  if (!tbody) return;
+
+  async function loadReports() {
+    const params = {};
+    const search = $('#insrSearch')?.value.trim() || '';
+    const status = $('#insrStatusFilter')?.value || '';
+    if (search) params.search = search;
+    if (status) params.status = status;
+    const res = await apiGet('inspection', 'reports/list', params).catch(() => ({ data: [] }));
+    const rows = res.data || [];
+    const canEdit = getPermSet().has('inspection-edit');
+    const canDelete = getPermSet().has('inspection-delete');
+    tbody.innerHTML = rows.map(r => `
+       <tr onclick="viewInspectionReport(${r.id})" style="cursor:pointer">
+         <td class="cell-mono">${escapeHtml(r.inspection_no)}</td>
+         <td class="cell-mono">${escapeHtml(r.application_no)}</td>
+         <td><strong>${escapeHtml(r.project_title)}</strong></td>
+         <td>${r.inspection_date ? formatDate(r.inspection_date) : '—'}</td>
+         <td>${escapeHtml(r.inspector_name || '—')}</td>
+         <td>${statusBadge(r.status)}</td>
+         <td><div class="row-actions">
+           ${canEdit ? `<button class="icon-btn" title="Open checklist" onclick="event.stopPropagation();location.href='inspection-checklist.php?id=${r.id}'">${userIcon('edit')}</button>` : ''}
+           ${canDelete && (r.status === 'Draft' || r.status === 'Rejected') ? `<button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
+         </div></td>
+       </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--gray-400);">No inspection records found.</td></tr>';
+    const pi = $('#insrPageInfo');
+    if (pi) pi.textContent = `${rows.length} record${rows.length === 1 ? '' : 's'}`;
+  }
+
+  $('#insrRefreshBtn')?.addEventListener('click', loadReports);
+  $('#insrSearch')?.addEventListener('input', debounce(loadReports, 250));
+  $('#insrStatusFilter')?.addEventListener('change', loadReports);
+  $('#insrPrintReportBtn')?.addEventListener('click', () => window.print());
+  window.addEventListener('beforeprint', fitReportToPage);
+  window.addEventListener('afterprint', resetReportFit);
+  bindInlineModal('#insrReportModal');
+
+  await loadReports();
+}
+
+async function viewInspectionReport(id) {
+  const res = await apiGet('inspection', 'checklist/get', { id });
+  if (!res.success) { showToast({ title: 'Error', message: res.error, type: 'danger' }); return; }
+  $('#insrReportBody').innerHTML = renderReportDoc(res.data);
+  openInlineModal('#insrReportModal');
+}
+
+/* --------------------------------------------------------------------------
+   INSPECTION HISTORY page
+   -------------------------------------------------------------------------- */
+async function initInspectionHistoryPage() {
+  const tbody = $('#inshTbody');
+  if (!tbody) return;
+  let page = 1;
+  const perPage = 10;
+
+  async function loadHistory() {
+    const params = { page, per_page: perPage };
+    const search = $('#inshSearch')?.value.trim() || '';
+    const status = $('#inshStatusFilter')?.value || '';
+    if (search) params.search = search;
+    if (status) params.status = status;
+    const res = await apiGet('inspection', 'history/list', params).catch(() => ({ data: [], total: 0 }));
+    const rows = res.data || [];
+    const total = res.total || 0;
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td class="cell-mono">${escapeHtml(r.inspection_no)}</td>
+        <td class="cell-mono">${escapeHtml(r.application_no)}</td>
+        <td><strong>${escapeHtml(r.project_title)}</strong></td>
+        <td>${r.inspection_date ? formatDate(r.inspection_date) : '—'}</td>
+        <td>${escapeHtml(r.inspector_name || '—')}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" title="View details" onclick="viewInspectionHistory(${r.id})">${userIcon('eye')}</button>
+          <button class="icon-btn" title="Open checklist" onclick="location.href='inspection-checklist.php?id=${r.id}'">${userIcon('edit')}</button>
+          ${r.status === 'Draft' || r.status === 'Rejected' ? `<button class="icon-btn" title="Delete" onclick="deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
+        </div></td>
+      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--gray-400);">No inspection records found.</td></tr>';
+    const pi = $('#inshPageInfo');
+    if (pi) pi.textContent = total ? `Showing ${(page - 1) * perPage + 1}–${Math.min(page * perPage, total)} of ${total}` : 'No records';
+    $('#inshPrev').disabled = page <= 1;
+    $('#inshNext').disabled = page * perPage >= total;
+  }
+
+  $('#inshRefreshBtn')?.addEventListener('click', loadHistory);
+  $('#inshSearch')?.addEventListener('input', debounce(() => { page = 1; loadHistory(); }, 250));
+  $('#inshStatusFilter')?.addEventListener('change', () => { page = 1; loadHistory(); });
+  $('#inshPrev')?.addEventListener('click', () => { if (page > 1) { page--; loadHistory(); } });
+  $('#inshNext')?.addEventListener('click', () => { page++; loadHistory(); });
+  bindInlineModal('#inshDetailModal');
+
+  await loadHistory();
+}
+
+async function viewInspectionHistory(id) {
+  const res = await apiGet('inspection', 'checklist/get', { id });
+  if (!res.success) { showToast({ title: 'Error', message: res.error, type: 'danger' }); return; }
+  $('#inshDetailBody').innerHTML = renderReportDoc(res.data);
+  const openBtn = $('#inshOpenBtn');
+  if (openBtn) {
+    openBtn.style.display = '';
+    openBtn.onclick = () => { location.href = 'inspection-checklist.php?id=' + id; };
+  }
+  openInlineModal('#inshDetailModal');
+}
+
+async function deleteInspectionRecord(id) {
+  openConfirm({
+    title: 'Delete inspection record?',
+    message: 'The inspection checklist, results, and photos will be permanently removed.',
+    confirmLabel: 'Delete',
+    onConfirm: async () => {
+      const res = await apiPost('inspection', 'checklist/delete', { id });
+      closeModal();
+      if (res.success) { showToast({ title: 'Deleted', message: 'Inspection record removed.', type: 'success' }); window.location.reload(); }
+      else showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
   });
 }
 

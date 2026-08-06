@@ -7,6 +7,32 @@ $action = $_GET['action'] ?? '';
 $module = $_GET['module'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 
+/* Save a base64 data-URL image (signature) into the given uploads subfolder. */
+function inspectionSaveSignature(string $dataUrl, string $subdir): string {
+    if (!preg_match('#^data:image/(png|jpeg);base64,#i', $dataUrl, $m)) return '';
+    $ext = strtolower($m[1]) === 'png' ? 'png' : 'jpg';
+    $dir = __DIR__ . "/../uploads/$subdir/";
+    if (!is_dir($dir)) mkdir($dir, 0775, true);
+    $name = $subdir . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $bin = base64_decode(substr($dataUrl, strpos($dataUrl, ',') + 1));
+    if ($bin === false || $bin === '') return '';
+    file_put_contents($dir . $name, $bin);
+    return "uploads/$subdir/$name";
+}
+
+/* Generate the next sequential inspection number: INS-YYYY-#### */
+function nextInspectionNo(PDO $pdo): string {
+    $prefix = 'INS-' . date('Y') . '-';
+    $row = $pdo->query("SELECT MAX(CAST(SUBSTRING(inspection_no, LENGTH('$prefix') + 1) AS UNSIGNED)) FROM inspection_records WHERE inspection_no LIKE '$prefix%'")->fetchColumn();
+    $seq = ((int)$row) + 1;
+    return $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+}
+
+/* Fixed ordering of the seven inspection categories. */
+function inspectionCategories(): array {
+    return ['General Safety', 'Architectural Works', 'Civil / Structural Works', 'Electrical Works', 'Mechanical Works', 'Sanitary / Plumbing Works', 'Electronics Works'];
+}
+
 try {
     $pdo = getDB();
     switch ("$module/$action") {
@@ -157,7 +183,8 @@ try {
             $assessmentApproval = $data['assessment_approval'] ?? '';
             $datePaid = $data['date_paid'] ?? null;
             $released = $data['released'] ?? null;
-            $status = $data['status'] ?? 'pending';
+            $rawStatus = $data['status'] ?? 'pending';
+            $status = normalizeWorkflowStatus($rawStatus);
 
             if (!$permitNo || !$applicantName || !$applicationNo || !$projectType || !$permitType || !$status) {
                 jsonResponse(['error' => 'Permit No., Applicant Name, App. No., Application, Permit Type, and Status are required.'], 422);
@@ -205,7 +232,8 @@ try {
             $datePaid = $data['date_paid'] ?? null;
             $released = $data['released'] ?? null;
             $firstIn = $data['first_in'] ?? null;
-            $status = $data['status'] ?? '';
+            $rawStatus = $data['status'] ?? '';
+            $status = normalizeWorkflowStatus($rawStatus);
 
             $pdo->prepare('UPDATE permit_workflows SET permit_no=?, application_no=?, applicant_name=?, project_type=?, permit_type=?, assessment_approval=?, date_paid=?, released=?, first_in=?, status=? WHERE id=?')
                 ->execute([$permitNo, $applicationNo, $applicantName, $projectType, $permitType, $assessmentApproval, $datePaid, $released, $firstIn, $status, $id]);
@@ -427,15 +455,366 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Release record deleted.']);
 
         /* =====================================================================
+           INSPECTION MANAGEMENT
+           (tables: inspection_schedules, inspection_records,
+            inspection_template_items, inspection_results, inspection_photos)
+           ===================================================================== */
+        case 'inspection/schedules/list':
+            requirePermission('inspection-schedule');
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = max(1, min(100, (int)($_GET['per_page'] ?? 50)));
+            $offset = ($page - 1) * $perPage;
+            $search = trim($_GET['search'] ?? '');
+            $status = trim($_GET['status'] ?? '');
+
+            $where = []; $params = [];
+            if ($search) {
+                $where[] = '(s.application_no LIKE ? OR s.permit_no LIKE ? OR s.project_title LIKE ? OR s.applicant_name LIKE ?)';
+                $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
+            }
+            if ($status) { $where[] = 's.status = ?'; $params[] = $status; }
+            $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM inspection_schedules s $whereSql");
+            $countStmt->execute($params);
+            $total = (int)$countStmt->fetchColumn();
+
+            $stmt = $pdo->prepare("
+                SELECT s.*, u.full_name AS inspector_name, e.full_name AS encoded_by_name
+                FROM inspection_schedules s
+                LEFT JOIN users u ON u.id = s.inspector_id
+                LEFT JOIN users e ON e.id = s.encoded_by
+                $whereSql
+                ORDER BY s.scheduled_date DESC, s.created_at DESC
+                LIMIT $perPage OFFSET $offset
+            ");
+            $stmt->execute($params);
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
+
+        case 'inspection/schedules/create':
+        case 'inspection/schedules/update':
+            requirePermission('inspection-schedule');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? 0);
+            $applicationNo = trim($data['application_no'] ?? '');
+            $permitNo = trim($data['permit_no'] ?? '');
+            $projectTitle = trim($data['project_title'] ?? '');
+            $projectLocation = trim($data['project_location'] ?? '');
+            $applicantName = trim($data['applicant_name'] ?? '');
+            $ownerRepresentative = trim($data['owner_representative'] ?? '');
+            $contactNumber = trim($data['contact_number'] ?? '');
+            $scheduledDate = $data['scheduled_date'] ?? null;
+            $scheduledTime = $data['scheduled_time'] ?? null;
+            $inspectorId = ($data['inspector_id'] ?? null) ? (int)$data['inspector_id'] : null;
+            $status = $data['status'] ?? 'Scheduled';
+            $remarks = trim($data['remarks'] ?? '');
+
+            if (!$applicationNo || !$projectTitle || !$applicantName) {
+                jsonResponse(['error' => 'Application No., Project Title, and Applicant are required.'], 422);
+            }
+            if ($action === 'schedules/create') {
+                $pdo->prepare('INSERT INTO inspection_schedules (application_no, permit_no, project_title, project_location, applicant_name, owner_representative, contact_number, scheduled_date, scheduled_time, inspector_id, status, remarks, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$applicationNo, $permitNo, $projectTitle, $projectLocation, $applicantName, $ownerRepresentative, $contactNumber, $scheduledDate, $scheduledTime, $inspectorId, $status, $remarks, $_SESSION['user_id']]);
+                $newId = $pdo->lastInsertId();
+                logActivity($_SESSION['user_id'], 'inspection_schedule_created', "Scheduled inspection for $applicationNo ($projectTitle)");
+                jsonResponse(['success' => true, 'id' => $newId, 'message' => 'Inspection schedule saved.']);
+            } else {
+                if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+                $pdo->prepare('UPDATE inspection_schedules SET application_no=?, permit_no=?, project_title=?, project_location=?, applicant_name=?, owner_representative=?, contact_number=?, scheduled_date=?, scheduled_time=?, inspector_id=?, status=?, remarks=? WHERE id=?')
+                    ->execute([$applicationNo, $permitNo, $projectTitle, $projectLocation, $applicantName, $ownerRepresentative, $contactNumber, $scheduledDate, $scheduledTime, $inspectorId, $status, $remarks, $id]);
+                logActivity($_SESSION['user_id'], 'inspection_schedule_updated', "Updated inspection schedule ID $id");
+                jsonResponse(['success' => true, 'message' => 'Inspection schedule updated.']);
+            }
+
+        case 'inspection/schedules/delete':
+            requirePermission('inspection-schedule');
+            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
+            $id = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $pdo->prepare('DELETE FROM inspection_schedules WHERE id = ?')->execute([$id]);
+            logActivity($_SESSION['user_id'], 'inspection_schedule_deleted', "Deleted inspection schedule ID $id");
+            jsonResponse(['success' => true, 'message' => 'Inspection schedule deleted.']);
+
+        case 'inspection/template':
+            requirePermission('inspection-checklist');
+            $rows = $pdo->query('SELECT id, category, item_text, item_type, sort_order FROM inspection_template_items WHERE is_active = 1 ORDER BY category, sort_order')->fetchAll();
+            $grouped = [];
+            foreach (inspectionCategories() as $cat) $grouped[$cat] = [];
+            foreach ($rows as $r) $grouped[$r['category']][] = $r;
+            jsonResponse(['success' => true, 'categories' => inspectionCategories(), 'data' => $grouped]);
+
+        case 'inspection/checklist/create':
+        case 'inspection/checklist/update':
+            requirePermission('inspection-checklist');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? 0);
+            $applicationNo = trim($data['application_no'] ?? '');
+            $permitNo = trim($data['permit_no'] ?? '');
+            $permitDateIssued = ($data['permit_date_issued'] ?? '') !== '' ? $data['permit_date_issued'] : null;
+            $projectTitle = trim($data['project_title'] ?? '');
+            $projectLocation = trim($data['project_location'] ?? '');
+            $ownerRepresentative = trim($data['owner_representative'] ?? '');
+            $contactNumber = trim($data['contact_number'] ?? '');
+            $projectContractor = trim($data['project_contractor'] ?? '');
+            $projectEngineer = trim($data['project_engineer'] ?? '');
+            $inspectionTeam = trim($data['inspection_team'] ?? '');
+            $inspectionDate = $data['inspection_date'] ?? date('Y-m-d');
+            $inspectionType = trim($data['inspection_type'] ?? '');
+            $inspectionResult = ($data['inspection_result'] ?? '') !== '' ? $data['inspection_result'] : null;
+            if ($inspectionResult !== null && !in_array($inspectionResult, ['Passed', 'Passed with Remarks', 'Ongoing', 'Failed', 'For Re-inspection'], true)) $inspectionResult = null;
+            $timeStarted = $data['time_started'] ?? null;
+            $timeFinished = $data['time_finished'] ?? null;
+            $physicalAccomplishment = ($data['physical_accomplishment'] ?? '') !== '' ? (float)$data['physical_accomplishment'] : null;
+            $mechAccomplishment = ($data['mech_accomplishment'] ?? '') !== '' ? (float)$data['mech_accomplishment'] : null;
+            $extraFields = $data['extra_fields'] ?? null;
+            if (is_array($extraFields) || is_object($extraFields)) $extraFields = json_encode($extraFields);
+            if ($extraFields !== null && trim((string)$extraFields) === '') $extraFields = null;
+            $overallFindings = trim($data['overall_findings'] ?? '');
+            $recommendations = trim($data['recommendations'] ?? '');
+            $completionPercentage = ($data['completion_percentage'] ?? '') !== '' ? (float)$data['completion_percentage'] : null;
+            $scheduleId = !empty($data['schedule_id']) ? (int)$data['schedule_id'] : null;
+            $results = is_array($data['results'] ?? null) ? $data['results'] : [];
+            $newSignature = trim($data['inspector_signature'] ?? '');
+
+            if (!$projectTitle || !$inspectionDate) {
+                jsonResponse(['error' => 'Project Title and Inspection Date are required.'], 422);
+            }
+
+            $existing = null;
+            if ($action === 'checklist/update') {
+                if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+                $stmt = $pdo->prepare('SELECT * FROM inspection_records WHERE id = ?');
+                $stmt->execute([$id]);
+                $existing = $stmt->fetch();
+                if (!$existing) jsonResponse(['error' => 'Inspection record not found.'], 404);
+                if (!in_array($existing['status'], ['Draft', 'Rejected'], true)) {
+                    jsonResponse(['error' => 'Only draft or rejected inspections can be edited.'], 422);
+                }
+            }
+
+            $signaturePath = $existing['inspector_signature'] ?? null;
+            if ($newSignature) $signaturePath = inspectionSaveSignature($newSignature, 'inspection_signatures');
+
+            if ($action === 'checklist/create') {
+                $inspectionNo = nextInspectionNo($pdo);
+                if (!$applicationNo) $applicationNo = 'APP-' . $inspectionNo;
+                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, inspector_signature, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $signaturePath, $_SESSION['user_id']]);
+                $id = (int)$pdo->lastInsertId();
+                logActivity($_SESSION['user_id'], 'inspection_checklist_created', "Created inspection $inspectionNo ($projectTitle)");
+            } else {
+                if (!$applicationNo) $applicationNo = $existing['application_no'];
+                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, inspector_signature=? WHERE id=?')
+                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $signaturePath, $id]);
+                logActivity($_SESSION['user_id'], 'inspection_checklist_updated', "Updated inspection ID $id");
+            }
+
+            $pdo->prepare('DELETE FROM inspection_results WHERE inspection_id = ?')->execute([$id]);
+            $resStmt = $pdo->prepare('INSERT INTO inspection_results (inspection_id, template_item_id, category, item_text, item_type, result, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            foreach ($results as $r) {
+                $ti = (int)($r['template_item_id'] ?? 0);
+                if (!$ti) continue;
+                $cat = $r['category'] ?? '';
+                $text = $r['item_text'] ?? '';
+                $itype = ($r['item_type'] ?? '') === 'checkbox' ? 'checkbox' : 'radio';
+                $res = in_array($r['result'] ?? '', ['Pass', 'Fail', 'N/A'], true) ? $r['result'] : 'Pass';
+                $rm = trim($r['remarks'] ?? '');
+                $resStmt->execute([$id, $ti, $cat, $text, $itype, $res, $rm]);
+            }
+
+            jsonResponse(['success' => true, 'id' => $id, 'message' => 'Inspection checklist saved.']);
+
+        case 'inspection/checklist/get':
+            requirePermission('inspection-checklist');
+            $id = (int)($_GET['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $stmt = $pdo->prepare("SELECT r.*, u.full_name AS inspector_name, rev.full_name AS reviewed_by_name, app.full_name AS approved_by_name, e.full_name AS encoded_by_name FROM inspection_records r LEFT JOIN users u ON u.id = r.inspector_id LEFT JOIN users rev ON rev.id = r.reviewed_by LEFT JOIN users app ON app.id = r.approved_by LEFT JOIN users e ON e.id = r.encoded_by WHERE r.id = ?");
+            $stmt->execute([$id]);
+            $record = $stmt->fetch();
+            if (!$record) jsonResponse(['error' => 'Inspection record not found.'], 404);
+            if ($record['extra_fields']) {
+                $record['extra_fields'] = json_decode($record['extra_fields'], true) ?: [];
+            } else {
+                $record['extra_fields'] = [];
+            }
+            $resStmt = $pdo->prepare('SELECT template_item_id, category, item_text, item_type, result, remarks FROM inspection_results WHERE inspection_id = ?');
+            $resStmt->execute([$id]);
+            $record['results'] = $resStmt->fetchAll();
+            $photoStmt = $pdo->prepare('SELECT id, file_path, caption FROM inspection_photos WHERE inspection_id = ? ORDER BY id');
+            $photoStmt->execute([$id]);
+            $record['photos'] = $photoStmt->fetchAll();
+            jsonResponse(['success' => true, 'data' => $record]);
+
+        case 'inspection/checklist/delete':
+            requirePermission('inspection-checklist');
+            if (!hasPermission('inspection-delete')) {
+                jsonResponse(['error' => 'You do not have permission to delete inspection records.'], 403);
+            }
+            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
+            $id = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $stmt = $pdo->prepare('SELECT inspection_no, project_title FROM inspection_records WHERE id = ?');
+            $stmt->execute([$id]);
+            $rec = $stmt->fetch();
+            $pdo->prepare('DELETE FROM inspection_records WHERE id = ?')->execute([$id]);
+            logActivity($_SESSION['user_id'], 'inspection_checklist_deleted', "Deleted inspection " . ($rec['inspection_no'] ?? "ID $id"));
+            jsonResponse(['success' => true, 'message' => 'Inspection record deleted.']);
+
+        case 'inspection/checklist/submit':
+            requirePermission('inspection-checklist');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $stmt = $pdo->prepare('SELECT inspection_no, status FROM inspection_records WHERE id = ?');
+            $stmt->execute([$id]);
+            $rec = $stmt->fetch();
+            if (!$rec) jsonResponse(['error' => 'Inspection record not found.'], 404);
+            if (!in_array($rec['status'], ['Draft', 'Rejected'], true)) jsonResponse(['error' => 'Record is already submitted.'], 422);
+            $pdo->prepare("UPDATE inspection_records SET status = 'Under Review' WHERE id = ?")->execute([$id]);
+            logActivity($_SESSION['user_id'], 'inspection_checklist_submitted', "Submitted inspection {$rec['inspection_no']} for review");
+            jsonResponse(['success' => true, 'message' => 'Inspection submitted for review.']);
+
+        case 'inspection/checklist/review':
+        case 'inspection/checklist/approve':
+        case 'inspection/checklist/reject':
+            requirePermission('inspection-checklist');
+            if (!hasPermission('inspection-edit')) {
+                jsonResponse(['error' => 'You do not have permission to review or approve inspection checklists.'], 403);
+            }
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $signature = trim($data['signature'] ?? '');
+            $remarks = trim($data['remarks'] ?? '');
+            if (!$signature) jsonResponse(['error' => 'A handwritten signature is required.'], 422);
+
+            $stmt = $pdo->prepare('SELECT inspection_no, status FROM inspection_records WHERE id = ?');
+            $stmt->execute([$id]);
+            $rec = $stmt->fetch();
+            if (!$rec) jsonResponse(['error' => 'Inspection record not found.'], 404);
+
+            if ($action === 'checklist/review') {
+                if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Record must be Under Review before reviewing.'], 422);
+                $path = inspectionSaveSignature($signature, 'inspection_signatures');
+                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
+                    ->execute([$_SESSION['user_id'], $path, $remarks, $remarks ? 'Rejected' : 'Approved', $id]);
+                $newStatus = $remarks ? 'Rejected' : 'Approved';
+                logActivity($_SESSION['user_id'], 'inspection_reviewed', "Reviewed inspection {$rec['inspection_no']} as $newStatus");
+                jsonResponse(['success' => true, 'status' => $newStatus, 'message' => "Inspection $newStatus."]);
+            } elseif ($action === 'checklist/approve') {
+                if ($rec['status'] !== 'Approved') jsonResponse(['error' => 'Record must be Approved before final approval.'], 422);
+                $path = inspectionSaveSignature($signature, 'inspection_signatures');
+                $pdo->prepare('UPDATE inspection_records SET approved_by=?, approval_signature=?, approval_date=NOW(), approval_remarks=?, status=? WHERE id=?')
+                    ->execute([$_SESSION['user_id'], $path, $remarks, 'Completed', $id]);
+                logActivity($_SESSION['user_id'], 'inspection_approved', "Completed inspection {$rec['inspection_no']}");
+                jsonResponse(['success' => true, 'status' => 'Completed', 'message' => 'Inspection completed.']);
+            } else {
+                if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Only Under Review records can be rejected.'], 422);
+                $path = inspectionSaveSignature($signature, 'inspection_signatures');
+                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
+                    ->execute([$_SESSION['user_id'], $path, $remarks, 'Rejected', $id]);
+                logActivity($_SESSION['user_id'], 'inspection_rejected', "Rejected inspection {$rec['inspection_no']}");
+                jsonResponse(['success' => true, 'status' => 'Rejected', 'message' => 'Inspection rejected.']);
+            }
+
+        case 'inspection/photos/upload':
+            requirePermission('inspection-checklist');
+            $inspectionId = (int)($_POST['inspection_id'] ?? $_GET['inspection_id'] ?? 0);
+            $caption = trim($_POST['caption'] ?? '');
+            if (!$inspectionId) jsonResponse(['error' => 'Inspection ID required.'], 422);
+            if (empty($_FILES['photo'])) jsonResponse(['error' => 'No file uploaded.'], 422);
+            $f = $_FILES['photo'];
+            $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            if (!in_array($ext, $allowed, true)) jsonResponse(['error' => 'Only image files are allowed (JPG, PNG, GIF, WEBP).'], 422);
+            if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 8 * 1024 * 1024) jsonResponse(['error' => 'Upload failed or file exceeds 8 MB.'], 422);
+            $dir = __DIR__ . '/../uploads/inspection_photos/';
+            if (!is_dir($dir)) mkdir($dir, 0775, true);
+            $name = 'photo_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            if (!move_uploaded_file($f['tmp_name'], $dir . $name)) jsonResponse(['error' => 'Could not store file.'], 500);
+            $path = "uploads/inspection_photos/$name";
+            $pdo->prepare('INSERT INTO inspection_photos (inspection_id, file_path, caption, uploaded_by) VALUES (?, ?, ?, ?)')
+                ->execute([$inspectionId, $path, $caption, $_SESSION['user_id']]);
+            jsonResponse(['success' => true, 'id' => (int)$pdo->lastInsertId(), 'path' => $path, 'message' => 'Photo uploaded.']);
+
+        case 'inspection/photos/remove':
+            requirePermission('inspection-checklist');
+            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
+            $photoId = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            if (!$photoId) jsonResponse(['error' => 'Photo ID required.'], 422);
+            $stmt = $pdo->prepare('SELECT file_path FROM inspection_photos WHERE id = ?');
+            $stmt->execute([$photoId]);
+            $ph = $stmt->fetch();
+            if ($ph) {
+                $abs = __DIR__ . '/../' . $ph['file_path'];
+                if (is_file($abs)) @unlink($abs);
+                $pdo->prepare('DELETE FROM inspection_photos WHERE id = ?')->execute([$photoId]);
+            }
+            jsonResponse(['success' => true, 'message' => 'Photo removed.']);
+
+        case 'inspection/history/list':
+            requirePermission('inspection-history');
+            $page = max(1, (int)($_GET['page'] ?? 1));
+            $perPage = max(1, min(100, (int)($_GET['per_page'] ?? 50)));
+            $offset = ($page - 1) * $perPage;
+            $search = trim($_GET['search'] ?? '');
+            $status = trim($_GET['status'] ?? '');
+
+            $where = []; $params = [];
+            if ($search) {
+                $where[] = '(r.inspection_no LIKE ? OR r.permit_no LIKE ? OR r.application_no LIKE ? OR r.project_title LIKE ? OR r.owner_representative LIKE ?)';
+                $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
+            }
+            if ($status) { $where[] = 'r.status = ?'; $params[] = $status; }
+            $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM inspection_records r $whereSql");
+            $countStmt->execute($params);
+            $total = (int)$countStmt->fetchColumn();
+
+            $stmt = $pdo->prepare("
+                SELECT r.*, u.full_name AS inspector_name
+                FROM inspection_records r
+                LEFT JOIN users u ON u.id = r.inspector_id
+                $whereSql
+                ORDER BY r.inspection_date DESC, r.created_at DESC
+                LIMIT $perPage OFFSET $offset
+            ");
+            $stmt->execute($params);
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
+
+        case 'inspection/reports/list':
+            requirePermission('inspection-reports');
+            $search = trim($_GET['search'] ?? '');
+            $status = trim($_GET['status'] ?? '');
+            $where = []; $params = [];
+            if ($search) {
+                $where[] = '(r.inspection_no LIKE ? OR r.permit_no LIKE ? OR r.application_no LIKE ? OR r.project_title LIKE ? OR r.owner_representative LIKE ?)';
+                $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
+            }
+            if ($status) { $where[] = 'r.status = ?'; $params[] = $status; }
+            $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+            $stmt = $pdo->prepare("
+                SELECT r.*, u.full_name AS inspector_name
+                FROM inspection_records r
+                LEFT JOIN users u ON u.id = r.inspector_id
+                $whereSql
+                ORDER BY r.inspection_date DESC, r.created_at DESC
+                LIMIT 100
+            ");
+            $stmt->execute($params);
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
+
+        /* =====================================================================
            NOTIFICATIONS  (table: notifications)
            ===================================================================== */
         case 'notifications/list':
-            $stmt = $pdo->prepare('SELECT n.*, u.full_name AS sender_name FROM notifications n LEFT JOIN users u ON u.id = n.sender_id WHERE n.user_id = ? ORDER BY n.created_at DESC LIMIT 100');
+            $stmt = $pdo->prepare("SELECT n.*, u.full_name AS sender_name FROM notifications n LEFT JOIN users u ON u.id = n.sender_id LEFT JOIN announcements a ON n.module_name = 'announcements' AND a.id = n.record_id WHERE n.user_id = ? AND (n.module_name != 'announcements' OR a.id IS NOT NULL) ORDER BY n.created_at DESC LIMIT 100");
             $stmt->execute([$_SESSION['user_id']]);
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         case 'notifications/unread-count':
-            $stmt = $pdo->prepare('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0');
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications n LEFT JOIN announcements a ON n.module_name = 'announcements' AND a.id = n.record_id WHERE n.user_id = ? AND n.is_read = 0 AND n.module_name = 'announcements' AND a.id IS NOT NULL");
             $stmt->execute([$_SESSION['user_id']]);
             jsonResponse(['success' => true, 'count' => (int)$stmt->fetchColumn()]);
 
@@ -447,8 +826,28 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $id = (int)($_GET['id'] ?? 0);
             if ($id) {
                 $pdo->prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?')->execute([$id, $_SESSION['user_id']]);
+            } else {
+                $recordId = (int)($_GET['record_id'] ?? 0);
+                if ($recordId) {
+                    $pdo->prepare("UPDATE notifications SET is_read = 1 WHERE module_name = 'announcements' AND record_id = ? AND user_id = ?")->execute([$recordId, $_SESSION['user_id']]);
+                }
             }
             jsonResponse(['success' => true]);
+
+        /* =====================================================================
+           SELF PERMISSIONS  (drives live sidebar visibility for users)
+           ===================================================================== */
+        case 'me/permissions':
+            $isAdmin = !empty($_SESSION['is_admin']);
+            $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
+            if ($isAdmin) {
+                $granted = ['dashboard', 'order-of-payment', 'op-records', 'permit-workflow', 'workflow-details', 'permit-approval-encoding', 'permit-approval-records', 'releasing', 'releasing-records', 'notifications', 'announcements', 'profile', 'settings'];
+            } else {
+                $stmt = $pdo->prepare('SELECT module_key FROM user_permissions WHERE user_id = ? AND is_granted = 1');
+                $stmt->execute([$_SESSION['user_id']]);
+                $granted = array_values(array_unique(array_merge($alwaysVisible, $stmt->fetchAll(PDO::FETCH_COLUMN))));
+            }
+            jsonResponse(['success' => true, 'granted' => $granted]);
 
         /* =====================================================================
            ANNOUNCEMENTS  (table: announcements)
@@ -467,15 +866,26 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if (!$title || !$content) jsonResponse(['error' => 'Title and content required.'], 422);
             $pdo->prepare('INSERT INTO announcements (title, content, created_by) VALUES (?, ?, ?)')
                 ->execute([$title, $content, $_SESSION['user_id']]);
+            $annId = (int)$pdo->lastInsertId();
 
-            logActivity($_SESSION['user_id'], 'announcement_created', "Created announcement: $title");
-            jsonResponse(['success' => true, 'message' => 'Announcement posted.']);
+            $recipients = $pdo->query('SELECT id FROM users WHERE is_active = 1 AND is_admin = 0')->fetchAll(PDO::FETCH_COLUMN);
+            if ($recipients) {
+                $stmt = $pdo->prepare('INSERT INTO notifications (user_id, sender_id, title, message, module_name, record_id) VALUES (?, ?, ?, ?, ?, ?)');
+                foreach ($recipients as $uid) {
+                    $stmt->execute([$uid, $_SESSION['user_id'], $title, $content, 'announcements', $annId]);
+                }
+            }
+            logActivity($_SESSION['user_id'], 'announcement_created', "Created announcement: $title (notified " . count($recipients) . " user(s))");
+            jsonResponse(['success' => true, 'message' => 'Announcement posted and ' . count($recipients) . ' user(s) notified.']);
 
         case 'announcements/delete':
             requireAdmin();
             $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM notifications WHERE module_name = 'announcements' AND record_id = ?")->execute([$id]);
             $pdo->prepare('DELETE FROM announcements WHERE id = ?')->execute([$id]);
+            $pdo->commit();
             logActivity($_SESSION['user_id'], 'announcement_deleted', "Deleted announcement ID $id");
             jsonResponse(['success' => true, 'message' => 'Announcement deleted.']);
 
@@ -487,23 +897,56 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $page = max(1, (int)($_GET['page'] ?? 1));
             $perPage = min(100, max(1, (int)($_GET['per_page'] ?? 50)));
             $offset = ($page - 1) * $perPage;
+            $userId = (int)($_GET['user_id'] ?? 0);
+            $search = trim($_GET['search'] ?? '');
+            $module = trim($_GET['module'] ?? '');
 
-            $countStmt = $pdo->query('SELECT COUNT(*) FROM activity_logs');
+            $where = []; $params = [];
+            if ($userId) { $where[] = 'a.user_id = ?'; $params[] = $userId; }
+            if ($module) { $where[] = 'a.module_name = ?'; $params[] = $module; }
+            if ($search) { $where[] = '(a.description LIKE ? OR a.action LIKE ? OR u.full_name LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; }
+            $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs a LEFT JOIN users u ON u.id = a.user_id $whereSql");
+            $countStmt->execute($params);
             $total = (int)$countStmt->fetchColumn();
 
             $stmt = $pdo->prepare("
                 SELECT a.*, u.full_name AS user_name
                 FROM activity_logs a
                 LEFT JOIN users u ON u.id = a.user_id
+                $whereSql
                 ORDER BY a.created_at DESC
                 LIMIT $perPage OFFSET $offset
             ");
-            $stmt->execute();
-            jsonResponse(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page]);
+            $stmt->execute($params);
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
 
         /* =====================================================================
-            DASHBOARD STATS (All authenticated users, scoped by permissions)
-            ===================================================================== */
+           DASHBOARD OVERVIEW (Admin stat figures, realtime polling)
+           ===================================================================== */
+        case 'dashboard/overview':
+            requireAdmin();
+            $today = date('Y-m-d');
+            $monthStart = date('Y-m-01');
+            $totalUsers = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+            $opToday = (int)$pdo->query("SELECT COUNT(*) FROM order_of_payments WHERE payment_date = '$today'")->fetchColumn();
+            $activeWorkflows = (int)$pdo->query("SELECT COUNT(*) FROM permit_workflows WHERE status NOT IN ('Approved','Disapproved','Released')")->fetchColumn();
+            $approvalsMonth = (int)$pdo->query("SELECT COUNT(*) FROM permit_approvals WHERE approval_date >= '$monthStart'")->fetchColumn();
+            $releasingToday = (int)$pdo->query("SELECT COUNT(*) FROM releasing_plans WHERE date_released = '$today'")->fetchColumn();
+            $notifCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE is_read = 0')->fetchColumn();
+            jsonResponse(['success' => true, 'data' => [
+                'op' => $opToday,
+                'workflow' => $activeWorkflows,
+                'approvals' => $approvalsMonth,
+                'releasing' => $releasingToday,
+                'users' => $totalUsers,
+                'notifications' => $notifCount,
+            ]]);
+
+        /* =====================================================================
+           DASHBOARD STATS (All authenticated users, scoped by permissions)
+           ===================================================================== */
         case 'dashboard/stats':
             requireAuth();
             $today = date('Y-m-d');
@@ -543,6 +986,65 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'data' => $stats]);
 
         /* =====================================================================
+           DASHBOARD TRENDS (Weekly / Monthly usage analytics, per user)
+           ===================================================================== */
+        case 'dashboard/trends':
+            requireAuth();
+            $userId = $_SESSION['user_id'];
+
+            $weekStart = date('Y-m-d', strtotime('monday this week'));
+            $monthStart = date('Y-m-01');
+            $monthEnd = date('Y-m-t');
+            $trendEnd = date('Y-m-d', strtotime($monthEnd . ' +1 day'));
+
+            $weekDates = [];
+            for ($i = 0; $i < 7; $i++) {
+                $date = date('Y-m-d', strtotime("$weekStart +$i day"));
+                $weekDates[$date] = date('D', strtotime($date));
+            }
+
+            $monthDates = [];
+            for ($d = $monthStart; strtotime($d) <= strtotime($monthEnd); $d = date('Y-m-d', strtotime($d . ' +1 day'))) {
+                $monthDates[$d] = (int)substr($d, 8, 2);
+            }
+
+            $trendBuilder = function (string $table, string $dateCol, string $userCol) use ($pdo, $userId, $weekStart, $trendEnd, $weekDates, $monthDates) {
+                $stmt = $pdo->prepare("SELECT DATE($dateCol) AS d, COUNT(*) AS c FROM $table WHERE $userCol = ? AND $dateCol >= ? AND $dateCol < ? GROUP BY DATE($dateCol)");
+                $stmt->execute([$userId, $weekStart, $trendEnd]);
+                $rows = [];
+                foreach ($stmt->fetchAll() as $r) {
+                    $rows[$r['d']] = (int)$r['c'];
+                }
+
+                $week = [];
+                foreach ($weekDates as $date => $label) {
+                    $week[] = ['label' => $label, 'date' => $date, 'count' => $rows[$date] ?? 0];
+                }
+
+                $month = [];
+                foreach ($monthDates as $date => $dayNum) {
+                    $month[] = ['label' => (string)$dayNum, 'date' => $date, 'count' => $rows[$date] ?? 0];
+                }
+
+                return ['week' => $week, 'month' => $month];
+            };
+
+            $trends = [];
+            if (hasPermission('order-of-payment')) {
+                $trends['op'] = $trendBuilder('order_of_payments', 'payment_date', 'encoded_by');
+            }
+            if (hasPermission('permit-workflow')) {
+                $trends['workflow'] = $trendBuilder('permit_workflows', 'created_at', 'encoded_by');
+            }
+            if (hasPermission('permit-approval-encoding') || hasPermission('permit-approval-records')) {
+                $trends['approval'] = $trendBuilder('permit_approvals', 'approval_date', 'approved_by');
+            }
+            if (hasPermission('releasing')) {
+                $trends['releasing'] = $trendBuilder('releasing_plans', 'date_released', 'encoded_by');
+            }
+            jsonResponse(['success' => true, 'data' => $trends]);
+
+        /* =====================================================================
            DASHBOARD STAFF SUMMARY (Admin reports)
            ===================================================================== */
         case 'dashboard/staff-summary':
@@ -563,7 +1065,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         /* =====================================================================
-           DASHBOARD EXPORT CSV
+           DASHBOARD EXPORT — Staff Productivity Report (.xlsx)
            ===================================================================== */
         case 'dashboard/export-csv':
             requireAdmin();
@@ -582,16 +1084,28 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $stmt->execute([$dateFrom, $dateTo, $dateFrom, $dateTo, $dateFrom, $dateTo, $dateFrom, $dateTo]);
             $rows = $stmt->fetchAll();
 
-            $output = fopen('php://temp', 'w+');
-            fputcsv($output, ['Name', 'Username', 'OP', 'Workflow', 'Approved', 'Releasing', 'Total']);
+            require_once __DIR__ . '/../includes/XlsxWriter.php';
+
+            $writer = new XlsxWriter('Staff Productivity Report');
+            $writer->setMeta([
+                'Generated: ' . date('Y-m-d H:i'),
+                'Period: ' . ($dateFrom ?: '…') . ' to ' . ($dateTo ?: '…'),
+            ]);
+            $writer->setHeaders(['User', 'Order of Payment', 'Permit Workflow', 'Permit Approved', 'Releasing', 'Total Transactions']);
+            $writer->setColumnFormats([1 => 'int', 2 => 'int', 3 => 'int', 4 => 'int', 5 => 'int']);
+
+            $totals = ['op' => 0, 'workflow' => 0, 'approved' => 0, 'releasing' => 0];
             foreach ($rows as $r) {
                 $total = $r['op'] + $r['workflow'] + $r['approved'] + $r['releasing'];
-                fputcsv($output, [$r['name'], $r['username'], $r['op'], $r['workflow'], $r['approved'], $r['releasing'], $total]);
+                $writer->addRow([$r['name'], (int)$r['op'], (int)$r['workflow'], (int)$r['approved'], (int)$r['releasing'], (int)$total]);
+                $totals['op'] += (int)$r['op'];
+                $totals['workflow'] += (int)$r['workflow'];
+                $totals['approved'] += (int)$r['approved'];
+                $totals['releasing'] += (int)$r['releasing'];
             }
-            rewind($output);
-            $csv = stream_get_contents($output);
-            fclose($output);
-            jsonResponse(['success' => true, 'csv' => $csv]);
+            $grandTotal = array_sum($totals);
+            $writer->setSummary(['GRAND TOTAL', $totals['op'], $totals['workflow'], $totals['approved'], $totals['releasing'], $grandTotal]);
+            $writer->output('Staff_Productivity_Report_' . date('Y-m-d'));
 
         /* =====================================================================
            PROFILE (User)
@@ -727,31 +1241,40 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
             $stmt = $pdo->prepare("
-                SELECT w.*, u.full_name AS encoded_by_name,
+                SELECT w.application_no, w.applicant_name, w.current_round, w.status,
+                    (SELECT lr.last_in FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_in,
+                    (SELECT lr.last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_out,
+                    (SELECT lr.processing_days FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_processing_days,
                     (SELECT COALESCE(SUM(lr2.processing_days), 0) FROM workflow_rounds lr2 WHERE lr2.workflow_id = w.id) AS total_tat
                 FROM permit_workflows w
-                LEFT JOIN users u ON u.id = w.encoded_by
                 $whereSql
                 ORDER BY w.created_at DESC
             ");
             $stmt->execute($params);
             $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $statusMap = [
+                'pending' => 'Pending',
+                'in-progress' => 'In Process',
+                'completed' => 'Completed',
+                'returned' => 'Returned',
+                'approved' => 'Approved',
+            ];
+
             $writer = new XlsxWriter('Permit Workflow');
-            $writer->setHeaders(['Application No.', 'Applicant', 'Project Type', 'Permit Type', 'Assessment Approval', 'Date Paid', 'Released', 'Status', 'Current Round', 'First In', 'Encoded By', 'TAT (days)']);
+            $subtitle = 'Generated: ' . date('Y-m-d H:i') . ($search ? '   |   Search: "' . $search . '"' : '');
+            $writer->setMeta([$subtitle]);
+            $writer->setHeaders(['Application No.', 'Applicant', 'Current Round', 'Last In Date', 'Last Out Date', 'Processing Days', 'Current Status', 'TAT (days)']);
+            $writer->setColumnFormats([5 => 'int', 7 => 'number']);
             foreach ($data as $r) {
                 $writer->addRow([
                     $r['application_no'] ?? '',
                     $r['applicant_name'] ?? '',
-                    $r['project_type'] ?? '',
-                    $r['permit_type'] ?? '',
-                    $r['assessment_approval'] ?? '',
-                    $r['date_paid'] ?? '',
-                    $r['released'] ?? '',
-                    $r['status'] ?? '',
-                    $r['current_round'] ?? '',
-                    $r['first_in'] ?? '',
-                    $r['encoded_by_name'] ?? '',
+                    'Round ' . ($r['current_round'] ?? 1),
+                    $r['latest_last_in'] ?? '',
+                    $r['latest_last_out'] ?? ($r['latest_last_in'] ? 'In progress' : ''),
+                    (int)($r['latest_processing_days'] ?? 0),
+                    $statusMap[$r['status'] ?? ''] ?? ($r['status'] ?? ''),
                     $r['total_tat'] ?? 0,
                 ]);
             }
@@ -780,7 +1303,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                     'alias'      => 'o',
                     'searchCols' => ['transaction_no', 'applicant_name', 'official_receipt_no'],
                     'dateCol'    => 'payment_date',
-                    'cols'       => ['Transaction No.', 'Applicant', 'Permit Type', 'Amount (PHP)', 'Status', 'OR No.', 'Payment Date'],
+                    'cols'       => ['Transaction No.', 'Applicant', 'Permit Type', 'Amount', 'Status', 'OR No.', 'Date'],
                     'query'      => "SELECT o.transaction_no, o.applicant_name, o.permit_type, o.amount, o.payment_status, o.official_receipt_no, o.payment_date
                                      FROM order_of_payments o LEFT JOIN users u ON u.id = o.encoded_by {WHERE} ORDER BY o.created_at DESC"
                 ],
@@ -789,8 +1312,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                     'alias'      => 'p',
                     'searchCols' => ['application_no', 'applicant_name', 'permit_type'],
                     'dateCol'    => 'approval_date',
-                    'cols'       => ['App No.', 'Applicant', 'Permit Type', 'BP#', 'Location', 'Type of Occupancy', 'Fees (PHP)', 'OR No.', 'Date Paid', 'Approval Date', 'TAT (days)', 'Approved By'],
-                    'query'      => "SELECT p.application_no, p.applicant_name, p.permit_type, p.bp_no, p.location, p.type_of_occupancy, p.fees, p.or_no, p.date_paid, p.approval_date, p.tat, u.full_name AS approved_by
+                    'cols'       => ['App No.', 'Applicant', 'Permit Type', 'Approval Date', 'Approved By'],
+                    'query'      => "SELECT p.application_no, p.applicant_name, p.permit_type, p.approval_date, u.full_name AS approved_by
                                      FROM permit_approvals p LEFT JOIN users u ON u.id = p.approved_by {WHERE} ORDER BY p.created_at DESC"
                 ],
                 'releasing' => [
@@ -798,9 +1321,9 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                     'alias'      => 'r',
                     'searchCols' => ['permit_application_no', 'applicant_name'],
                     'dateCol'    => 'date_released',
-                    'cols'       => ['App No.', 'Applicant', 'Claimed By', 'Date Released', 'Time Released', 'Released By'],
-                    'query'      => "SELECT r.permit_application_no, r.applicant_name, r.claimed_by, r.date_released, r.time_released, u.full_name AS released_by_name
-                                     FROM releasing_plans r LEFT JOIN users u ON u.id = r.encoded_by {WHERE} ORDER BY r.created_at DESC"
+                    'cols'       => ['Release Date', 'Permit App No.', 'Applicant', 'Claimed By', 'Time Released'],
+                    'query'      => "SELECT r.date_released, r.permit_application_no, r.applicant_name, r.claimed_by, r.time_released
+                                     FROM releasing_plans r {WHERE} ORDER BY r.created_at DESC"
                 ]
             ];
 
@@ -823,10 +1346,16 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if ($dateFrom || $dateTo) {
                 $subtitle .= '   |   Period: ' . ($dateFrom ?: '…') . ' to ' . ($dateTo ?: '…');
             }
+            if ($search) {
+                $subtitle .= '   |   Search: "' . $search . '"';
+            }
 
             $writer = new XlsxWriter($cfg['label']);
-            $writer->setMeta([$cfg['label'], $subtitle]);
+            $writer->setMeta([$subtitle]);
             $writer->setHeaders($cfg['cols']);
+            if ($table === 'order_of_payment') {
+                $writer->setColumnFormats([3 => 'currency']);
+            }
             foreach ($rows as $row) {
                 $writer->addRow($row);
             }
