@@ -1935,7 +1935,7 @@ function renderReportDoc(rec) {
     </table>
 
     <table class="rpt-cat">
-      <thead><tr><th>Category</th><th>Findings</th><th>Remarks</th></tr></thead>
+      <thead><tr><th>Category</th><th>Percentage</th><th>Remarks</th></tr></thead>
       <tbody>${catRows}</tbody>
     </table>
 
