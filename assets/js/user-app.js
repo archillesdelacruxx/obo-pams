@@ -1918,7 +1918,7 @@ function renderReportDoc(rec) {
         <div class="rpt-rep">REPUBLIC OF THE PHILIPPINES</div>
         <div class="rpt-city">General Santos City</div>
         <div class="rpt-office">Office of The Building Official</div>
-        <div class="rpt-doc">MONITORING REPORT</div>
+        <div class="rpt-doc">MONITORING INSPECTION</div>
       </div>
       <div class="rpt-logo right"><img src="../../assets/images/OBO LOGO.png" alt="Office Logo"></div>
     </div>
@@ -1931,13 +1931,28 @@ function renderReportDoc(rec) {
       <tr><td class="k">Contractor</td><td class="v">${escapeHtml(rec.project_contractor || '—')}</td><td class="k">Project Engineer</td><td class="v">${escapeHtml(rec.project_engineer || '—')}</td></tr>
       <tr><td class="k">Inspection Type</td><td class="v">${escapeHtml(rec.inspection_type || '—')}</td><td class="k">Inspection Date</td><td class="v">${rec.inspection_date ? formatDate(rec.inspection_date) : '—'}</td></tr>
       <tr><td class="k">Time Started</td><td class="v">${escapeHtml(rec.time_started || '—')}</td><td class="k">Time Finished</td><td class="v">${escapeHtml(rec.time_finished || '—')}</td></tr>
-      <tr><td class="k">Physical Progress</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
+      <tr><td class="k">Percentage</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
     </table>
 
     <table class="rpt-cat">
       <thead><tr><th>Category</th><th>Findings</th><th>Remarks</th></tr></thead>
       <tbody>${catRows}</tbody>
     </table>
+
+    <div class="rpt-summary-boxes">
+      <div class="rpt-summary-box">
+        <div class="box-label">Percentage</div>
+        <div class="box-value">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</div>
+      </div>
+      <div class="rpt-summary-box">
+        <div class="box-label">Boundary</div>
+        <div class="box-value">${(() => { const sb = ['Front', 'Rear', 'Right Side', 'Left Side'].map(k => xfSb[k] ? `${escapeHtml(k)} ${escapeHtml(xfSb[k])}m` : '').filter(Boolean).join(', '); return sb || '—'; })()}</div>
+      </div>
+      <div class="rpt-summary-box">
+        <div class="box-label">Remarks</div>
+        <div class="box-value">${escapeHtml(rec.recommendations || '') || '—'}</div>
+      </div>
+    </div>
 
     <div class="rpt-block">
       <div class="rpt-block-title">SUMMARY OF INSPECTION</div>
