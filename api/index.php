@@ -983,6 +983,9 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if (hasPermission('releasing')) {
                 $stats['releasing'] = $periodCounts('releasing_plans', 'date_released', 'encoded_by');
             }
+            if (hasPermission('inspection-checklist')) {
+                $stats['inspection'] = $periodCounts('inspection_records', 'inspection_date', 'inspector_id');
+            }
             jsonResponse(['success' => true, 'data' => $stats]);
 
         /* =====================================================================

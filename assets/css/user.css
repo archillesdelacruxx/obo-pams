@@ -1849,8 +1849,8 @@ body[data-page="order-of-payment"] .form-card .section-body {
   margin-bottom: 8px;
 }
 .rpt-logo img {
-  width: 60px;
-  height: 60px;
+  width: 90px;
+  height: 90px;
   object-fit: contain;
 }
 .rpt-title {
@@ -1898,7 +1898,7 @@ body[data-page="order-of-payment"] .form-card .section-body {
 .rpt-cat th,
 .rpt-cat td {
   border: 1px solid #000;
-  padding: 4px 8px;
+  padding: 8px 10px;
   vertical-align: top;
 }
 .rpt-info td.k {
@@ -1923,6 +1923,12 @@ body[data-page="order-of-payment"] .form-card .section-body {
 .rpt-cat td.k {
   font-weight: 700;
 }
+.rpt-cat th:nth-child(1),
+.rpt-cat td:nth-child(1) { width: 20%; }
+.rpt-cat th:nth-child(2),
+.rpt-cat td:nth-child(2) { width: 11%; text-align: center; }
+.rpt-cat th:nth-child(3),
+.rpt-cat td:nth-child(3) { width: 39%; }
 .rpt-block {
   border: 1px solid #000;
   margin-bottom: 6px;
@@ -2024,6 +2030,10 @@ body[data-page="order-of-payment"] .form-card .section-body {
 .rpt-foot-gen {
   flex: 1;
   text-align: left;
+}
+.report-doc,
+.report-doc * {
+  font-family: Arial, "Segoe UI", Helvetica, sans-serif;
 }
 
 /* --------------------------------------------------------------------------

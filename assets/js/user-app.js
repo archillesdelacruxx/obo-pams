@@ -167,6 +167,9 @@ async function loadUserStats() {
   if (hasPerm('releasing') && stats.releasing) {
     moduleCards.push({ title: 'Releasing', icon: 'package', color: 'orange', data: stats.releasing });
   }
+  if (hasPerm('inspection-checklist') && stats.inspection) {
+    moduleCards.push({ title: 'Inspections Conducted', icon: 'clipboard', color: 'green', data: stats.inspection });
+  }
 
   const statGrid = $('#userStatGrid');
   if (statGrid) {
@@ -1860,12 +1863,15 @@ function renderReportDoc(rec) {
     return '—';
   };
 
-  const catFindings = (cat) => {
-    const bits = [];
+  const catPct = (cat) => {
     const pctVal = cat === 'Mechanical Works'
       ? (xfPct[cat] != null ? xfPct[cat] : rec.mech_accomplishment)
       : xfPct[cat];
-    if (pctVal != null && pctVal !== '') bits.push(`${escapeHtml(String(pctVal))}%`);
+    return (pctVal != null && pctVal !== '') ? `${escapeHtml(String(pctVal))}%` : '—';
+  };
+
+  const catFindings = (cat) => {
+    const bits = [];
     if (cat === 'Architectural Works') {
       const sb = ['Front', 'Rear', 'Right Side', 'Left Side'].map(k => xfSb[k] ? `${escapeHtml(k)} ${escapeHtml(xfSb[k])}m` : '').filter(Boolean).join(', ');
       if (sb) bits.push(`Setbacks: ${sb}`);
@@ -1881,6 +1887,7 @@ function renderReportDoc(rec) {
     const rem = (xfRem[cat] || '').split('\n').map(l => escapeHtml(l)).join('<br>');
     return `<tr>
       <td class="k">${escapeHtml(cat)}</td>
+      <td class="c">${catPct(cat)}</td>
       <td class="v">${catFindings(cat)}</td>
       <td class="v">${rem || '—'}</td>
     </tr>`;
@@ -1931,11 +1938,11 @@ function renderReportDoc(rec) {
       <tr><td class="k">Contractor</td><td class="v">${escapeHtml(rec.project_contractor || '—')}</td><td class="k">Project Engineer</td><td class="v">${escapeHtml(rec.project_engineer || '—')}</td></tr>
       <tr><td class="k">Inspection Type</td><td class="v">${escapeHtml(rec.inspection_type || '—')}</td><td class="k">Inspection Date</td><td class="v">${rec.inspection_date ? formatDate(rec.inspection_date) : '—'}</td></tr>
       <tr><td class="k">Time Started</td><td class="v">${escapeHtml(rec.time_started || '—')}</td><td class="k">Time Finished</td><td class="v">${escapeHtml(rec.time_finished || '—')}</td></tr>
-      <tr><td class="k">Percentage</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
+      <tr><td class="k">Overall Percentage</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
     </table>
 
     <table class="rpt-cat">
-      <thead><tr><th>Category</th><th>Percentage</th><th>Remarks</th></tr></thead>
+      <thead><tr><th>Category</th><th>Percentage</th><th>Findings</th><th>Remarks</th></tr></thead>
       <tbody>${catRows}</tbody>
     </table>
 
