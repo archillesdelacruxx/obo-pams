@@ -1836,152 +1836,132 @@ function renderSignatureCell(rec, field) {
 }
 
 function renderReportDoc(rec) {
-  const groupBy = (list) => {
-    const g = {};
-    (list || []).forEach(r => { (g[r.category] = g[r.category] || []).push(r); });
-    return g;
-  };
-  const resultsByCat = groupBy(rec.results);
   const xf = rec.extra_fields || {};
-  const xfSb = xf.setbacks || {};
   const xfPct = xf.pct || {};
   const xfRem = xf.remarks || {};
 
   const catOrder = ['General Safety', 'Architectural Works', 'Civil / Structural Works', 'Electrical Works', 'Mechanical Works', 'Sanitary / Plumbing Works', 'Electronics Works'];
 
-  const catStatus = (cat) => {
-    const items = resultsByCat[cat] || [];
-    if (!items.length) return '—';
-    let hasFail = false, allPass = true, anyPass = false;
-    items.forEach(r => {
-      if (r.result === 'Fail') hasFail = true;
-      if (r.result === 'Pass') anyPass = true; else allPass = false;
-    });
-    if (hasFail) return 'FAILED';
-    if (allPass && anyPass) return 'PASSED';
-    if (anyPass) return 'ONGOING';
-    return '—';
-  };
-
   const catPct = (cat) => {
     const pctVal = cat === 'Mechanical Works'
       ? (xfPct[cat] != null ? xfPct[cat] : rec.mech_accomplishment)
       : xfPct[cat];
-    return (pctVal != null && pctVal !== '') ? `${escapeHtml(String(pctVal))}%` : '—';
+    return (pctVal != null && pctVal !== '') ? `${escapeHtml(String(pctVal))}` : '';
   };
 
-  const catFindings = (cat) => {
-    const bits = [];
-    if (cat === 'Architectural Works') {
-      const sb = ['Front', 'Rear', 'Right Side', 'Left Side'].map(k => xfSb[k] ? `${escapeHtml(k)} ${escapeHtml(xfSb[k])}m` : '').filter(Boolean).join(', ');
-      if (sb) bits.push(`Setbacks: ${sb}`);
-    }
-    if (cat === 'Civil / Structural Works') {
-      if (xf.floorLevel) bits.push(`Floor: ${escapeHtml(xf.floorLevel)}`);
-      if (xf.others) bits.push(`Others: ${escapeHtml(xf.others)}`);
-    }
-    return bits.length ? bits.join(' · ') : '—';
+  const catRemarks = (cat) => {
+    const rem = xfRem[cat] || '';
+    return escapeHtml(rem);
   };
 
-  const catRows = catOrder.map(cat => {
-    const rem = (xfRem[cat] || '').split('\n').map(l => escapeHtml(l)).join('<br>');
-    return `<tr>
-      <td class="k">${escapeHtml(cat)}</td>
-      <td class="c">${catPct(cat)}</td>
-      <td class="v">${catFindings(cat)}</td>
-      <td class="v">${rem || '—'}</td>
-    </tr>`;
-  }).join('');
+  const infoField = (label, value) =>
+    `<span class="info-row"><span class="info-label">${escapeHtml(label)}</span><span class="info-colon">:</span><span class="info-value">${escapeHtml(value || '')}</span></span>`;
 
-  const resultRadio = (label) => {
-    const on = rec.inspection_result === label;
-    return `<label class="rpt-check ${on ? 'on' : ''}"><span class="box">${on ? '☑' : '☐'}</span> ${escapeHtml(label)}</label>`;
-  };
+  const is1st = rec.inspection_type && rec.inspection_type.toLowerCase().includes('1st');
+  const is2nd = rec.inspection_type && rec.inspection_type.toLowerCase().includes('2nd');
+  const is3rd = rec.inspection_type && rec.inspection_type.toLowerCase().includes('3rd');
 
-  const photosHtml = (rec.photos || []).map(p =>
-    `<div class="report-photo"><img src="${imgPath(p.file_path)}" alt="site photo"><div class="text-xs text-muted">${escapeHtml(p.caption || '')}</div></div>`
-  ).join('');
+  const catHeaders = [
+    'General Safety',
+    'Architectural Works',
+    'Civil / Structural Works',
+    'Electrical Works',
+    'Mechanical Works',
+    'Sanitary / Plumbing Works',
+    'Electronics Works'
+  ];
 
-  const sigBlock = (field, name, title, date) => {
-    const sig = field === 'inspector' ? rec.inspector_signature
-      : field === 'reviewer' ? (rec.review_signature || rec.approval_signature) : '';
-    const dateText = field === 'inspector' ? rec.inspection_date
-      : field === 'reviewer' ? (rec.review_date || rec.approval_date) : null;
-    return `<div class="rpt-sig">
-      <div class="rpt-sig-head">${field === 'inspector' ? 'INSPECTED BY' : 'REVIEWED &amp; NOTED BY'}</div>
-      <div class="rpt-sig-line">${sig ? `<img class="sig-img" src="${imgPath(sig)}" alt="signature">` : '&nbsp;'}</div>
-      <div class="rpt-sig-name">${escapeHtml(name || '______________________')}</div>
-      <div class="rpt-sig-title">${escapeHtml(title || '')}</div>
-      <div class="rpt-sig-date">Date: ${dateText ? formatDate(dateText) : '______________'}</div>
-    </div>`;
-  };
-
-  const today = formatDate(new Date());
+  const catHeaderCells = catHeaders.map(h => `<th>${h}</th>`).join('');
+  const pctCells = catOrder.map(cat => `<td>${catPct(cat) ? escapeHtml(catPct(cat)) + '%' : ''}</td>`).join('');
+  const remCells = catOrder.map(cat => `<td>${catRemarks(cat)}</td>`).join('');
 
   return `
-    <div class="rpt-head">
-      <div class="rpt-logo left"><img src="../../assets/images/GENSAN LOGO.png" alt="City Logo"></div>
-      <div class="rpt-title">
-        <div class="rpt-rep">REPUBLIC OF THE PHILIPPINES</div>
-        <div class="rpt-city">General Santos City</div>
-        <div class="rpt-office">Office of The Building Official</div>
-        <div class="rpt-doc">MONITORING INSPECTION</div>
+    <div class="mr-doc">
+      <div class="mr-header">
+        <div class="mr-doc-code">OBO-ED-FM-32 v1</div>
       </div>
-      <div class="rpt-logo right"><img src="../../assets/images/OBO LOGO.png" alt="Office Logo"></div>
-    </div>
 
-    <table class="rpt-info">
-      <tr><td class="k">Permit No.</td><td class="v">${escapeHtml(rec.permit_no || '—')}</td><td class="k">Application No.</td><td class="v">${escapeHtml(rec.application_no || '—')}</td></tr>
-      <tr><td class="k">Owner / Applicant</td><td class="v">${escapeHtml(rec.owner_representative || '—')}</td><td class="k">Contact No.</td><td class="v">${escapeHtml(rec.contact_number || '—')}</td></tr>
-      <tr><td class="k">Project Title</td><td class="v" colspan="3">${escapeHtml(rec.project_title || '—')}</td></tr>
-      <tr><td class="k">Project Address</td><td class="v" colspan="3">${escapeHtml(rec.project_location || '—')}</td></tr>
-      <tr><td class="k">Contractor</td><td class="v">${escapeHtml(rec.project_contractor || '—')}</td><td class="k">Project Engineer</td><td class="v">${escapeHtml(rec.project_engineer || '—')}</td></tr>
-      <tr><td class="k">Inspection Type</td><td class="v">${escapeHtml(rec.inspection_type || '—')}</td><td class="k">Inspection Date</td><td class="v">${rec.inspection_date ? formatDate(rec.inspection_date) : '—'}</td></tr>
-      <tr><td class="k">Time Started</td><td class="v">${escapeHtml(rec.time_started || '—')}</td><td class="k">Time Finished</td><td class="v">${escapeHtml(rec.time_finished || '—')}</td></tr>
-      <tr><td class="k">Overall Percentage</td><td class="v" colspan="3">${rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '—'}</td></tr>
-    </table>
-
-    <table class="rpt-cat">
-      <thead><tr><th>Category</th><th>Percentage</th><th>Findings</th><th>Remarks</th></tr></thead>
-      <tbody>${catRows}</tbody>
-    </table>
-
-    <div class="rpt-block">
-      <div class="rpt-block-title">SUMMARY OF INSPECTION</div>
-      <div class="rpt-block-body">${escapeHtml(rec.overall_findings || '')}</div>
-    </div>
-
-    <div class="rpt-block">
-      <div class="rpt-block-title">RECOMMENDATIONS</div>
-      <div class="rpt-block-body">${escapeHtml(rec.recommendations || '')}</div>
-    </div>
-
-    <div class="rpt-block">
-      <div class="rpt-block-title">INSPECTION RESULT</div>
-      <div class="rpt-result">
-        ${resultRadio('Passed')}
-        ${resultRadio('Passed with Remarks')}
-        ${resultRadio('Ongoing')}
-        ${resultRadio('Failed')}
-        ${resultRadio('For Re-inspection')}
+      <div class="mr-title-box">
+        <div class="mr-title">Monitoring On-Site Occular Inspection Checklist</div>
+        <div class="mr-inspection-checks">
+          <label class="mr-check"><input type="checkbox" ${is1st ? 'checked' : ''}> 1st Inspection</label>
+          <label class="mr-check"><input type="checkbox" ${is2nd ? 'checked' : ''}> 2nd Inspection</label>
+          <label class="mr-check"><input type="checkbox" ${is3rd ? 'checked' : ''}> Others: <span class="mr-check-line"></span></label>
+        </div>
       </div>
-    </div>
 
-    ${photosHtml ? `<div class="rpt-block">
-      <div class="rpt-block-title">ATTACHED INSPECTION PHOTOS</div>
-      <div class="rpt-photos">${photosHtml}</div>
-    </div>` : ''}
+      <table class="mr-info-box">
+        <tbody>
+          <tr>
+            <td>${infoField('Application No.', rec.application_no)}</td>
+            <td>${infoField('Time Started', rec.time_started)}</td>
+          </tr>
+          <tr>
+            <td>${infoField('Project Title', rec.project_title)}</td>
+            <td>${infoField('Time Finished', rec.time_finished)}</td>
+          </tr>
+          <tr>
+            <td>${infoField('Name of Applicant', rec.owner_representative)}</td>
+            <td>${infoField('Completion Percentage', rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '')}</td>
+          </tr>
+          <tr>
+            <td>${infoField('Architect / Engineer', rec.project_engineer)}</td>
+            <td>${infoField('Date of Inspection', rec.inspection_date ? formatDate(rec.inspection_date) : '')}</td>
+          </tr>
+          <tr>
+            <td>${infoField('Project Location', rec.project_location)}</td>
+            <td>${infoField('Date of Re-inspection', rec.review_date ? formatDate(rec.review_date) : '')}</td>
+          </tr>
+        </tbody>
+      </table>
 
-    <div class="rpt-signatures">
-      ${sigBlock('inspector', rec.inspector_name, 'Building Inspector', rec.inspection_date)}
-      ${sigBlock('reviewer', rec.reviewed_by_name, 'Building Official / Supervisor', rec.review_date)}
-    </div>
+      <div class="mr-workcat-box">
+        <div class="mr-workcat-title">WORK CATEGORY</div>
+        <table class="mr-wc-table">
+          <thead>
+            <tr><th class="mr-wc-label-cell"></th>${catHeaderCells}</tr>
+          </thead>
+          <tbody>
+            <tr><td class="mr-wc-label-cell" style="font-weight:700;text-align:left;padding-left:8px;">Percentage</td>${pctCells}</tr>
+            <tr><td class="mr-wc-label-cell" style="font-weight:700;text-align:left;padding-left:8px;">Remarks</td>${remCells}</tr>
+          </tbody>
+        </table>
+      </div>
 
-    <div class="rpt-foot">
-      <span>Document No.: ${escapeHtml(rec.inspection_no || '—')}</span>
-      <span>Printed Date: ${today}</span>
-      <span class="rpt-foot-gen">Generated by Permit Monitoring System</span>
-      <span>Page 1 of 1</span>
+      <div class="mr-signatures">
+        <div class="mr-sig-box">
+          <div class="mr-sig-label">INSPECTED BY:</div>
+          <div class="mr-sig-row">
+            <div class="mr-sig-person">
+              <div class="mr-sig-name">${rec.inspector_signature ? `<img class="sig-img" src="${imgPath(rec.inspector_signature)}" alt="signature">` : escapeHtml(rec.inspector_name || '')}</div>
+              <div class="mr-sig-line">Name</div>
+              <div class="mr-sig-line">Position</div>
+            </div>
+            <div class="mr-sig-divider"></div>
+            <div class="mr-sig-person">
+              <div class="mr-sig-name"></div>
+              <div class="mr-sig-line">Name</div>
+              <div class="mr-sig-line">Position</div>
+            </div>
+          </div>
+        </div>
+        <div class="mr-sig-box">
+          <div class="mr-sig-label">REVIEWED &amp; NOTED BY:</div>
+          <div class="mr-sig-row">
+            <div class="mr-sig-person">
+              <div class="mr-sig-name">${rec.review_signature ? `<img class="sig-img" src="${imgPath(rec.review_signature)}" alt="signature">` : escapeHtml(rec.reviewed_by_name || '')}</div>
+              <div class="mr-sig-line">Name</div>
+              <div class="mr-sig-line">Position</div>
+            </div>
+            <div class="mr-sig-divider"></div>
+            <div class="mr-sig-person">
+              <div class="mr-sig-name"></div>
+              <div class="mr-sig-line">Name</div>
+              <div class="mr-sig-line">Position</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -2409,8 +2389,8 @@ async function removeInspectionPhoto(photoId) {
 function fitReportToPage() {
   const doc = $('#insrReportBody');
   if (!doc || !doc.children.length) return;
-  const PRINT_W = 816;
-  const PRINT_H = 1344;
+  const PRINT_W = 739;
+  const PRINT_H = 1171;
   doc.style.zoom = '1';
   doc.style.width = PRINT_W + 'px';
   const naturalH = doc.scrollHeight;

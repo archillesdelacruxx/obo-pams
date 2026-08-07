@@ -25,7 +25,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/user.css?v=20260806p">
   <style>
     @media print {
-      @page { size: 8.5in 14in; margin: 6mm; }
+      @page { size: 8.5in 13in; margin: 0.4in; }
     }
   </style>
 </head>
