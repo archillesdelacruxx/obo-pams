@@ -329,13 +329,13 @@
 }
 
 .badge-workflow.completed {
-  background: #22A55A;
+  background: #3B82F6;
   color: #FFFFFF;
   font-weight: 700;
 }
 
 .badge-workflow.in-progress {
-  background: #5B8DEF;
+  background: #F97316;
   color: #FFFFFF;
   font-weight: 700;
 }
@@ -345,7 +345,7 @@
 }
 
 .badge-workflow.released {
-  background: #8A94A6;
+  background: #22A55A;
   color: #FFFFFF;
   font-weight: 700;
 }
@@ -2559,3 +2559,4 @@ body[data-page="order-of-payment"] .form-card .section-body {
       grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     }
   }
+}

@@ -107,3 +107,23 @@ function normalizeWorkflowStatus(string $status): string {
     if (!$normalized) return 'Pending';
     return $normalized;
 }
+
+function businessDaysBetween(?string $start, ?string $end): int {
+    if (!$start || !$end) return 0;
+    $startTs = strtotime($start);
+    $endTs = strtotime($end);
+    if ($endTs < $startTs) return 0;
+    $days = 0;
+    while ($startTs < $endTs) {
+        $dow = (int)date('N', $startTs); // 1=Mon ... 7=Sun
+        if ($dow < 6) $days++;
+        $startTs += 86400;
+    }
+    return $days;
+}
+
+function businessDaysSqlExpr(string $endSql, string $startSql): string {
+    $endExpr = "(FLOOR(DATEDIFF($endSql, '2000-01-03')/7)*5 + LEAST(MOD(DATEDIFF($endSql, '2000-01-03'),7),5))";
+    $startExpr = "(FLOOR(DATEDIFF($startSql, '2000-01-03')/7)*5 + LEAST(MOD(DATEDIFF($startSql, '2000-01-03'),7),5))";
+    return "COALESCE(GREATEST(0, $endExpr - $startExpr), 0)";
+}

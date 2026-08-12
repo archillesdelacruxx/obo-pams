@@ -26,7 +26,7 @@ $profile = $stmt->fetch();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="user-settings" data-full-name="<?php echo escape($_SESSION['full_name']); ?>" data-username="<?php echo escape($_SESSION['username']); ?>" data-email="<?php echo escape($_SESSION['email'] ?? ''); ?>">
   <div class="app-shell" id="appShell">

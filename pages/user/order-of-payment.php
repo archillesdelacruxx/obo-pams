@@ -21,7 +21,7 @@ requirePermission('order-of-payment');
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="order-of-payment">
   <div class="app-shell" id="appShell">

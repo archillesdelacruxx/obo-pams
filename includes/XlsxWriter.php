@@ -200,6 +200,7 @@ class XlsxWriter {
 
         $xml .= '<sheetViews><sheetView tabSelected="1" workbookViewId="0" showGridLines="0">';
         $xml .= '<pane ySplit="' . $headerRow . '" topLeftCell="A' . ($headerRow + 1) . '" activePane="bottomLeft" state="frozen"/>';
+        $xml .= '<selection pane="bottomLeft" activeCell="A' . ($headerRow + 1) . '" sqref="A' . ($headerRow + 1) . '"/>';
         $xml .= '</sheetView></sheetViews>';
 
         $xml .= '<cols>';
@@ -208,14 +209,6 @@ class XlsxWriter {
             $xml .= '<col min="' . $i . '" max="' . $i . '" width="' . $w . '" customWidth="1"/>';
         }
         $xml .= '</cols>';
-
-        if ($mergeRefs) {
-            $xml .= '<mergeCells count="' . count($mergeRefs) . '">';
-            foreach ($mergeRefs as $ref) {
-                $xml .= '<mergeCell ref="' . $ref . '"/>';
-            }
-            $xml .= '</mergeCells>';
-        }
 
         $xml .= '<sheetData>';
 
@@ -292,6 +285,14 @@ class XlsxWriter {
         $xml .= '</sheetData>';
 
         $xml .= '<autoFilter ref="A' . $headerRow . ':' . $lastColLetter . $lastDataRow . '"/>';
+
+        if ($mergeRefs) {
+            $xml .= '<mergeCells count="' . count($mergeRefs) . '">';
+            foreach ($mergeRefs as $ref) {
+                $xml .= '<mergeCell ref="' . $ref . '"/>';
+            }
+            $xml .= '</mergeCells>';
+        }
 
         $xml .= '<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>';
         $xml .= '<pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0" horizontalDpi="300" verticalDpi="300"/>';
@@ -414,9 +415,13 @@ class XlsxWriter {
         $xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             . '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="' . count($strings) . '" uniqueCount="' . count($strings) . '">';
         foreach ($strings as $s) {
-            $xml .= '<si><t>' . htmlspecialchars($s, ENT_XML1, 'UTF-8') . '</t></si>';
+            $xml .= '<si><t>' . htmlspecialchars($this->xmlSafe((string)$s), ENT_XML1, 'UTF-8') . '</t></si>';
         }
         $xml .= '</sst>';
         return $xml;
+    }
+
+    private function xmlSafe(string $s): string {
+        return (string)preg_replace('/[^\x{9}\x{a}\x{d}\x{20}-\x{d7ff}\x{e000}-\x{fffd}\x{10000}-\x{10ffff}]/u', '', $s);
     }
 }

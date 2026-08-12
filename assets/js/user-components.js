@@ -360,6 +360,21 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function businessDaysBetween(startStr, endStr) {
+  if (!startStr || !endStr) return 0;
+  const start = new Date(startStr + 'T00:00:00');
+  const end = new Date(endStr + 'T00:00:00');
+  if (isNaN(start) || isNaN(end) || end < start) return 0;
+  let days = 0;
+  const cur = new Date(start);
+  while (cur < end) {
+    const dow = cur.getDay(); // 0=Sun ... 6=Sat
+    if (dow !== 0 && dow !== 6) days++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return days;
+}
+
 function renderPagination(containerId, total, perPage = 10) {
   const el = $(containerId);
   if (!el) return;

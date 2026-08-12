@@ -23,7 +23,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260805">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="inspection-checklist" data-is-admin="<?php echo empty($_SESSION['is_admin']) ? '0' : '1'; ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
   <div class="app-shell" id="appShell">

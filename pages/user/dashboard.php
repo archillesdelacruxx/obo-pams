@@ -29,7 +29,7 @@ $hasApproval = !empty($perms['permit-approval-encoding']) || !empty($perms['perm
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="user-dashboard" data-first-name="<?php echo escape(explode(' ', $_SESSION['full_name'])[0]); ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
   <div class="app-shell" id="appShell">

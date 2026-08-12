@@ -21,7 +21,7 @@ requirePermission('workflow-details');
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="workflow-details" data-is-admin="<?php echo !empty($_SESSION['is_admin']) ? '1' : '0'; ?>">
   <div class="app-shell" id="appShell">
@@ -80,7 +80,7 @@ requirePermission('workflow-details');
   <script src="../../assets/js/modal.js"></script>
   <script src="../../assets/js/user-components.js?v=20260803e"></script>
   <script src="../../assets/js/realtime.js?v=20260803b"></script>
-  <script src="../../assets/js/user-app.js?v=20260803e"></script>
+  <script src="../../assets/js/user-app.js?v=20260812d"></script>
 </body>
 </html>
 

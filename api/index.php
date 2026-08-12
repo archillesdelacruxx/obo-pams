@@ -157,13 +157,22 @@ try {
 
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
+            $latestInSql = "(SELECT lr.last_in FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $latestOutSql = "(SELECT lr.last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $latestNoOutSql = "(SELECT lr.no_last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $firstInSql = "(SELECT lr3.last_in FROM workflow_rounds lr3 WHERE lr3.workflow_id = w.id ORDER BY lr3.round_number ASC LIMIT 1)";
+            $lastOutSql = "(SELECT lr2.last_out FROM workflow_rounds lr2 WHERE lr2.workflow_id = w.id AND lr2.last_out IS NOT NULL AND lr2.no_last_out = 0 ORDER BY lr2.round_number DESC LIMIT 1)";
+            $latestDaysSql = businessDaysSqlExpr($latestOutSql, $latestInSql);
+            $totalTatSql = businessDaysSqlExpr($lastOutSql, $firstInSql);
+
             $stmt = $pdo->prepare("
                 SELECT w.*, u.full_name AS encoded_by_name,
                     (SELECT COUNT(*) FROM workflow_rounds WHERE workflow_id = w.id) AS round_count,
-                    (SELECT lr.last_in FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_in,
-                    (SELECT lr.last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_out,
-                    (SELECT lr.processing_days FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_processing_days,
-                    (SELECT COALESCE(SUM(lr2.processing_days), 0) FROM workflow_rounds lr2 WHERE lr2.workflow_id = w.id) AS total_tat
+                    $latestInSql AS latest_last_in,
+                    $latestOutSql AS latest_last_out,
+                    $latestNoOutSql AS latest_no_last_out,
+                    $latestDaysSql AS latest_processing_days,
+                    $totalTatSql AS total_tat
                 FROM permit_workflows w
                 LEFT JOIN users u ON u.id = w.encoded_by
                 $whereSql
@@ -191,13 +200,13 @@ try {
             }
 
             $pdo->beginTransaction();
-            $firstIn = $datePaid ?: date('Y-m-d');
+            $firstIn = $data['first_in'] ?? ($datePaid ?: date('Y-m-d'));
             $stmt = $pdo->prepare('INSERT INTO permit_workflows (permit_no, application_no, applicant_name, project_type, permit_type, assessment_approval, date_paid, released, status, first_in, current_round, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)');
             $stmt->execute([$permitNo, $applicationNo, $applicantName, $projectType, $permitType, $assessmentApproval, $datePaid, $released, $status, $firstIn, $_SESSION['user_id']]);
             $workflowId = $pdo->lastInsertId();
 
-            $pdo->prepare('INSERT INTO workflow_rounds (workflow_id, round_number, last_in, processing_days) VALUES (?, 1, ?, ?)')
-                ->execute([$workflowId, $firstIn, 1]);
+            $pdo->prepare('INSERT INTO workflow_rounds (workflow_id, round_number, last_in, processing_days) VALUES (?, 1, ?, 0)')
+                ->execute([$workflowId, $firstIn]);
 
             $pdo->commit();
             logActivity($_SESSION['user_id'], 'workflow_created', "Created workflow for $permitNo ($applicantName)");
@@ -237,6 +246,10 @@ try {
 
             $pdo->prepare('UPDATE permit_workflows SET permit_no=?, application_no=?, applicant_name=?, project_type=?, permit_type=?, assessment_approval=?, date_paid=?, released=?, first_in=?, status=? WHERE id=?')
                 ->execute([$permitNo, $applicationNo, $applicantName, $projectType, $permitType, $assessmentApproval, $datePaid, $released, $firstIn, $status, $id]);
+            if ($firstIn) {
+                $pdo->prepare('UPDATE workflow_rounds SET last_in = ? WHERE workflow_id = ? AND round_number = 1')
+                    ->execute([$firstIn, $id]);
+            }
             logActivity($_SESSION['user_id'], 'workflow_updated', "Updated workflow ID $id");
             jsonResponse(['success' => true, 'message' => 'Workflow updated.']);
 
@@ -253,7 +266,8 @@ try {
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $workflowId = (int)($data['workflow_id'] ?? 0);
             $lastIn = $data['last_in'] ?? date('Y-m-d');
-            $lastOut = $data['last_out'] ?? null;
+            $noLastOut = !empty($data['no_last_out']) ? 1 : 0;
+            $lastOut = $noLastOut ? null : ($data['last_out'] ?? null);
             $remarks = trim($data['remarks'] ?? '');
 
             if (!$workflowId) jsonResponse(['error' => 'Workflow ID required.'], 422);
@@ -262,10 +276,10 @@ try {
             $stmt->execute([$workflowId]);
             $nextRound = (int)$stmt->fetchColumn() + 1;
 
-            $days = $lastOut ? max(1, (int)((strtotime($lastOut) - strtotime($lastIn)) / 86400)) : 1;
+            $days = businessDaysBetween($lastIn, $lastOut);
 
-            $pdo->prepare('INSERT INTO workflow_rounds (workflow_id, round_number, last_in, last_out, processing_days, remarks) VALUES (?, ?, ?, ?, ?, ?)')
-                ->execute([$workflowId, $nextRound, $lastIn, $lastOut, $days, $remarks]);
+            $pdo->prepare('INSERT INTO workflow_rounds (workflow_id, round_number, last_in, last_out, no_last_out, processing_days, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                ->execute([$workflowId, $nextRound, $lastIn, $lastOut, $noLastOut, $days, $remarks]);
             $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
                 ->execute([$nextRound, $lastOut ? 'Completed' : 'In Progress', $lastOut ? 'Approved' : 'Under Review', $workflowId]);
 
@@ -278,22 +292,23 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $workflowId = (int)($data['workflow_id'] ?? 0);
             $roundNumber = (int)($data['round_number'] ?? 0);
             $lastIn = $data['last_in'] ?? null;
-            $lastOut = $data['last_out'] ?? null;
-            $processingDays = (int)($data['processing_days'] ?? 0);
+            $noLastOut = !empty($data['no_last_out']) ? 1 : 0;
+            $lastOut = $noLastOut ? null : ($data['last_out'] ?? null);
             $remarks = trim($data['remarks'] ?? '');
+            $processingDays = businessDaysBetween($lastIn, $lastOut);
 
             if (!$workflowId || !$roundNumber) jsonResponse(['error' => 'Workflow ID and Round Number required.'], 422);
 
-            $pdo->prepare('UPDATE workflow_rounds SET last_in=?, last_out=?, processing_days=?, remarks=? WHERE workflow_id=? AND round_number=?')
-                ->execute([$lastIn, $lastOut, $processingDays, $remarks, $workflowId, $roundNumber]);
+            $pdo->prepare('UPDATE workflow_rounds SET last_in=?, last_out=?, no_last_out=?, processing_days=?, remarks=? WHERE workflow_id=? AND round_number=?')
+                ->execute([$lastIn, $lastOut, $noLastOut, $processingDays, $remarks, $workflowId, $roundNumber]);
 
             $maxRound = $pdo->prepare('SELECT MAX(round_number) AS max_round FROM workflow_rounds WHERE workflow_id = ?');
             $maxRound->execute([$workflowId]);
             $latestRound = (int)$maxRound->fetchColumn();
-            $status = 'In Progress';
-            if ($lastOut) $status = 'Completed';
-            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, status = ? WHERE id = ?')
-                ->execute([$latestRound, $status, $workflowId]);
+            $stage = $lastOut ? 'Completed' : 'In Progress';
+            $status = $lastOut ? 'Approved' : 'Under Review';
+            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
+                ->execute([$latestRound, $stage, $status, $workflowId]);
 
             logActivity($_SESSION['user_id'], 'workflow_round_updated', "Updated round $roundNumber for workflow ID $workflowId");
             jsonResponse(['success' => true, 'message' => "Round $roundNumber updated."]);
@@ -311,15 +326,16 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $maxRound = $pdo->prepare('SELECT MAX(round_number) AS max_round FROM workflow_rounds WHERE workflow_id = ?');
             $maxRound->execute([$workflowId]);
             $latestRound = (int)$maxRound->fetchColumn();
-            $newStatus = 'In Progress';
+            $newStatus = 'Under Review';
+            $newStage = 'In Progress';
             if ($latestRound > 0) {
                 $latestRoundData = $pdo->prepare('SELECT last_out FROM workflow_rounds WHERE workflow_id = ? AND round_number = ?');
                 $latestRoundData->execute([$workflowId, $latestRound]);
                 $lr = $latestRoundData->fetch();
-                if ($lr && $lr['last_out']) $newStatus = 'Completed';
+                if ($lr && $lr['last_out']) { $newStatus = 'Approved'; $newStage = 'Completed'; }
             }
-            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, status = ? WHERE id = ?')
-                ->execute([$latestRound ?: 1, $newStatus, $workflowId]);
+            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
+                ->execute([$latestRound ?: 1, $newStage, $newStatus, $workflowId]);
 
             logActivity($_SESSION['user_id'], 'workflow_round_deleted', "Deleted round $roundNumber from workflow ID $workflowId");
             jsonResponse(['success' => true, 'message' => "Round $roundNumber deleted."]);
@@ -1243,12 +1259,21 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             }
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
+            $latestInSql = "(SELECT lr.last_in FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $latestOutSql = "(SELECT lr.last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $latestNoOutSql = "(SELECT lr.no_last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1)";
+            $firstInSql = "(SELECT lr3.last_in FROM workflow_rounds lr3 WHERE lr3.workflow_id = w.id ORDER BY lr3.round_number ASC LIMIT 1)";
+            $lastOutSql = "(SELECT lr2.last_out FROM workflow_rounds lr2 WHERE lr2.workflow_id = w.id AND lr2.last_out IS NOT NULL AND lr2.no_last_out = 0 ORDER BY lr2.round_number DESC LIMIT 1)";
+            $latestDaysSql = businessDaysSqlExpr($latestOutSql, $latestInSql);
+            $totalTatSql = businessDaysSqlExpr($lastOutSql, $firstInSql);
+
             $stmt = $pdo->prepare("
                 SELECT w.application_no, w.applicant_name, w.current_round, w.status,
-                    (SELECT lr.last_in FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_in,
-                    (SELECT lr.last_out FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_last_out,
-                    (SELECT lr.processing_days FROM workflow_rounds lr WHERE lr.workflow_id = w.id ORDER BY lr.round_number DESC LIMIT 1) AS latest_processing_days,
-                    (SELECT COALESCE(SUM(lr2.processing_days), 0) FROM workflow_rounds lr2 WHERE lr2.workflow_id = w.id) AS total_tat
+                    $latestInSql AS latest_last_in,
+                    $latestOutSql AS latest_last_out,
+                    $latestNoOutSql AS latest_no_last_out,
+                    $latestDaysSql AS latest_processing_days,
+                    $totalTatSql AS total_tat
                 FROM permit_workflows w
                 $whereSql
                 ORDER BY w.created_at DESC
@@ -1275,8 +1300,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                     $r['applicant_name'] ?? '',
                     'Round ' . ($r['current_round'] ?? 1),
                     $r['latest_last_in'] ?? '',
-                    $r['latest_last_out'] ?? ($r['latest_last_in'] ? 'In progress' : ''),
-                    (int)($r['latest_processing_days'] ?? 0),
+                    !empty($r['latest_no_last_out']) ? 'No last out date for this round' : ($r['latest_last_out'] ?? ($r['latest_last_in'] ? 'In progress' : '')),
+                    !empty($r['latest_no_last_out']) ? null : (int)($r['latest_processing_days'] ?? 0),
                     $statusMap[$r['status'] ?? ''] ?? ($r['status'] ?? ''),
                     $r['total_tat'] ?? 0,
                 ]);

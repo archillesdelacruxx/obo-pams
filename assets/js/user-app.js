@@ -505,10 +505,14 @@ async function loadWorkflowTable(search = '') {
   const rows = res.data || [];
   const isAdmin = document.body.dataset.isAdmin === '1';
 
-  tbody.innerHTML = rows.map(r => {
+  tbody.innerHTML = rows.map((r, idx) => {
     const lastIn = r.latest_last_in ? formatDate(r.latest_last_in) : '—';
-    const lastOutHtml = r.latest_last_out ? formatDate(r.latest_last_out) : (r.latest_last_in ? '<span style="color:var(--gray-400);font-style:italic;">In progress</span>' : '—');
-    const procDays = r.latest_processing_days ?? 0;
+    const noLastOut = Number(r.latest_no_last_out) === 1;
+    const lastOutHtml = noLastOut
+      ? '<span style="color:var(--gray-400);font-style:italic;">No last out date for this round</span>'
+      : (r.latest_last_out ? formatDate(r.latest_last_out) : (r.latest_last_in ? '<span style="color:var(--gray-400);font-style:italic;">In progress</span>' : '—'));
+    const procDays = noLastOut ? '—' : (r.latest_processing_days ?? 0);
+    const procDaysHtml = procDays === '—' ? '—' : `${procDays} day${procDays !== 1 ? 's' : ''}`;
     const tat = r.total_tat || 0;
     const actions = [];
     actions.push(`<button class="icon-btn" title="Edit" onclick="event.stopPropagation();editWorkflow(${r.id})">${userIcon('edit')}</button>`);
@@ -517,12 +521,13 @@ async function loadWorkflowTable(search = '') {
       actions.push(`<button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteWorkflow(${r.id})">${userIcon('trash')}</button>`);
     }
     return `<tr style="cursor:pointer" title="Click to view details" onclick="window.location.href='workflow-details.php?id=${r.id}'">
+      <td class="cell-mono">${idx + 1}</td>
       <td class="cell-mono">${r.application_no}</td>
       <td class="cell-name" title="${r.applicant_name}">${r.applicant_name}</td>
       <td><span class="round-chip">Round ${r.current_round || 1}</span></td>
       <td>${lastIn}</td>
       <td>${lastOutHtml}</td>
-      <td class="tat-days">${procDays} day${procDays !== 1 ? 's' : ''}</td>
+      <td class="tat-days">${procDaysHtml}</td>
       <td>${statusBadge(r.status)}</td>
       <td><span style="font-family:var(--font-mono);font-weight:700;">${tat} days</span></td>
       <td><div class="row-actions">${actions.join('')}</div></td>
@@ -729,7 +734,12 @@ async function initWorkflowDetailsPage() {
   if (tbody && data.rounds && data.rounds.length) {
     tbody.innerHTML = data.rounds.map(r => {
       const lastIn = r.last_in ? formatDate(r.last_in) : '—';
-      const lastOutHtml = r.last_out ? formatDate(r.last_out) : '<span style="color:var(--gray-400);font-style:italic;">In progress</span>';
+      const noLastOut = Number(r.no_last_out) === 1;
+      const lastOutHtml = noLastOut
+        ? '<span style="color:var(--gray-400);font-style:italic;">No last out date for this round</span>'
+        : (r.last_out ? formatDate(r.last_out) : '<span style="color:var(--gray-400);font-style:italic;">In progress</span>');
+      const roundTat = noLastOut ? 0 : businessDaysBetween(r.last_in, r.last_out);
+      const roundTatHtml = noLastOut ? '—' : `${roundTat} day${roundTat !== 1 ? 's' : ''}`;
       const actions = [];
       actions.push(`<button class="icon-btn" title="Edit Round" onclick="editRound(${data.id}, ${r.round_number})">${userIcon('edit')}</button>`);
       if (isAdmin) {
@@ -740,7 +750,7 @@ async function initWorkflowDetailsPage() {
         <td class="cell-mono">${data.application_no || '—'}</td>
         <td>${lastIn}</td>
         <td>${lastOutHtml}</td>
-        <td class="tat-days">${r.processing_days} day${r.processing_days !== 1 ? 's' : ''}</td>
+        <td class="tat-days">${roundTatHtml}</td>
         <td class="remarks-cell">${r.remarks || ''}</td>
         <td><div class="row-actions">${actions.join('')}</div></td>
       </tr>`;
@@ -749,7 +759,11 @@ async function initWorkflowDetailsPage() {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-400);font-style:italic;">No rounds yet. Click "Add Round" to start.</td></tr>';
   }
 
-const totalTat = (data.rounds || []).reduce((s, r) => s + (r.processing_days || 0), 0);
+const roundsList = data.rounds || [];
+  const firstInDate = roundsList.length ? roundsList[0].last_in : null;
+  const lastValidOutRound = roundsList.filter(r => r.last_out && Number(r.no_last_out) !== 1).pop();
+  const lastOutDate = lastValidOutRound ? lastValidOutRound.last_out : null;
+  const totalTat = businessDaysBetween(firstInDate, lastOutDate);
   $('#wdTotalRounds') && ($('#wdTotalRounds').textContent = (data.rounds || []).length || '0');
   $('#wdTotalTat') && ($('#wdTotalTat').textContent = totalTat + ' days');
   $('#wdLastUpdated') && ($('#wdLastUpdated').textContent = data.updated_at ? formatDate(data.updated_at) : '—');
@@ -774,6 +788,7 @@ function openAddRoundModal(data) {
         <div class="form-grid">
           <div class="form-group"><label>Last In Date</label><input class="form-control" type="date" id="newRoundIn" value="${todayStr}"></div>
           <div class="form-group"><label>Last Out Date</label><input class="form-control" type="date" id="newRoundOut"></div>
+          <div class="form-group full"><label class="checkbox-label"><input type="checkbox" id="newRoundNoOut"> No last out date for this round</label></div>
           <div class="form-group full"><label>Remarks</label><textarea class="form-control" id="newRoundRemarks" rows="3" placeholder="Enter remarks…"></textarea></div>
         </div>
       </form>
@@ -783,11 +798,22 @@ function openAddRoundModal(data) {
       <button class="btn btn-primary" id="saveRoundBtn">${userIcon('plus')} Add Round</button>
     </div>`);
 
+  const toggleNewRoundOut = () => {
+    const outEl = $('#newRoundOut');
+    const chk = $('#newRoundNoOut');
+    if (outEl && chk) {
+      outEl.disabled = chk.checked;
+      if (chk.checked) outEl.value = '';
+    }
+  };
+  $('#newRoundNoOut')?.addEventListener('change', toggleNewRoundOut);
+
   $('#saveRoundBtn')?.addEventListener('click', async () => {
     const lastIn = $('#newRoundIn')?.value;
-    const lastOut = $('#newRoundOut')?.value || null;
+    const noLastOut = !!$('#newRoundNoOut')?.checked;
+    const lastOut = noLastOut ? null : ($('#newRoundOut')?.value || null);
     const remarks = $('#newRoundRemarks')?.value.trim() || '';
-    const res = await apiPost('workflow', 'add-round', { workflow_id: data.id, last_in: lastIn, last_out: lastOut, remarks });
+    const res = await apiPost('workflow', 'add-round', { workflow_id: data.id, last_in: lastIn, last_out: lastOut, no_last_out: noLastOut ? 1 : 0, remarks });
     if (res.success) {
       closeUserModal();
       showToast({ title: 'Round added', message: `Round ${nextRound} added to ${data.application_no}.`, type: 'success' });
@@ -811,18 +837,37 @@ async function editRound(workflowId, roundNumber) {
         <div class="form-grid">
           <div class="form-group"><label>Last In Date</label><input class="form-control" type="date" id="editRoundIn" value="${round.last_in || ''}"></div>
           <div class="form-group"><label>Last Out Date</label><input class="form-control" type="date" id="editRoundOut" value="${round.last_out || ''}"></div>
-          <div class="form-group"><label>Processing Days</label><input class="form-control" type="number" id="editRoundDays" value="${round.processing_days || 0}" min="0"></div>
+          <div class="form-group full"><label class="checkbox-label"><input type="checkbox" id="editRoundNoOut" ${Number(round.no_last_out) === 1 ? 'checked' : ''}> No last out date for this round</label></div>
+          <div class="form-group"><label>TAT (Auto)</label><input class="form-control" type="number" id="editRoundDays" value="0" min="0" readonly title="Auto-calculated from dates (excludes weekends)"></div>
           <div class="form-group full"><label>Remarks</label><textarea class="form-control" id="editRoundRemarks" rows="3" placeholder="Enter remarks…">${round.remarks || ''}</textarea></div>
         </div>
       </form>
     </div>
     <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Cancel</button><button class="btn btn-primary" id="saveEditRoundBtn">${userIcon('check')} Save</button></div>`);
+  const syncRoundDays = () => {
+    const daysEl = $('#editRoundDays');
+    const noOut = !!$('#editRoundNoOut')?.checked;
+    if (daysEl) daysEl.value = noOut ? 0 : businessDaysBetween($('#editRoundIn')?.value, $('#editRoundOut')?.value);
+  };
+  const toggleEditRoundOut = () => {
+    const outEl = $('#editRoundOut');
+    const chk = $('#editRoundNoOut');
+    if (outEl && chk) {
+      outEl.disabled = chk.checked;
+      if (chk.checked) outEl.value = '';
+    }
+    syncRoundDays();
+  };
+  $('#editRoundNoOut')?.addEventListener('change', toggleEditRoundOut);
+  $('#editRoundIn')?.addEventListener('change', syncRoundDays);
+  $('#editRoundOut')?.addEventListener('change', syncRoundDays);
+  toggleEditRoundOut();
   $('#saveEditRoundBtn')?.addEventListener('click', async () => {
     const lastIn = $('#editRoundIn')?.value || null;
-    const lastOut = $('#editRoundOut')?.value || null;
-    const processingDays = parseInt($('#editRoundDays')?.value) || 0;
+    const noLastOut = !!$('#editRoundNoOut')?.checked;
+    const lastOut = noLastOut ? null : ($('#editRoundOut')?.value || null);
     const remarks = $('#editRoundRemarks')?.value.trim() || '';
-    const upd = await apiPost('workflow', 'update-round', { workflow_id: workflowId, round_number: roundNumber, last_in: lastIn, last_out: lastOut, processing_days: processingDays, remarks });
+    const upd = await apiPost('workflow', 'update-round', { workflow_id: workflowId, round_number: roundNumber, last_in: lastIn, last_out: lastOut, no_last_out: noLastOut ? 1 : 0, remarks });
     if (upd.success) { closeUserModal(); showToast({ title: 'Updated', type: 'success', message: `Round ${roundNumber} updated.` }); setTimeout(() => window.location.reload(), 500); }
     else { showToast({ title: 'Error', type: 'danger', message: upd.error || 'Failed to update round.' }); }
   });

@@ -21,7 +21,7 @@ requirePermission('permit-workflow');
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="permit-workflow" data-is-admin="<?php echo !empty($_SESSION['is_admin']) ? '1' : '0'; ?>">
   <div class="app-shell" id="appShell">
@@ -42,7 +42,7 @@ requirePermission('permit-workflow');
             <button class="btn btn-secondary btn-sm" id="workflowExport"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export in Excel</button>
           </div>
           <div class="scroll-x">
-            <table class="data-table"><thead><tr><th>Application No.</th><th>Applicant</th><th>Current Round</th><th>Last In Date</th><th>Last Out Date</th><th>Processing Days</th><th>Current Status</th><th>TAT</th><th>Action</th></tr></thead><tbody id="workflowTbody"></tbody></table>
+            <table class="data-table"><thead><tr><th>No.</th><th>Application No.</th><th>Applicant</th><th>Current Round</th><th>Last In Date</th><th>Last Out Date</th><th>Processing Days</th><th>Current Status</th><th>TAT</th><th>Action</th></tr></thead><tbody id="workflowTbody"></tbody></table>
           </div>
         </div>
       </main>
@@ -61,7 +61,7 @@ requirePermission('permit-workflow');
   <script src="../../assets/js/modal.js"></script>
   <script src="../../assets/js/user-components.js?v=20260803e"></script>
   <script src="../../assets/js/realtime.js?v=20260803b"></script>
-  <script src="../../assets/js/user-app.js?v=20260803e"></script>
+  <script src="../../assets/js/user-app.js?v=20260812d"></script>
 </body>
 </html>
 

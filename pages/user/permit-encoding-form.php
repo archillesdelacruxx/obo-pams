@@ -59,7 +59,7 @@ if ($type === 'demolition') { $permitNoLabel = 'DP#'; $appNoLabel = 'DAN#'; $per
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260814">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
 <body data-page="permit-encoding-form" data-type="<?php echo $type; ?>">
   <div class="app-shell" id="appShell">
