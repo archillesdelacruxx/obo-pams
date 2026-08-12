@@ -280,8 +280,8 @@ try {
 
             $pdo->prepare('INSERT INTO workflow_rounds (workflow_id, round_number, last_in, last_out, no_last_out, processing_days, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)')
                 ->execute([$workflowId, $nextRound, $lastIn, $lastOut, $noLastOut, $days, $remarks]);
-            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
-                ->execute([$nextRound, $lastOut ? 'Completed' : 'In Progress', $lastOut ? 'Approved' : 'Under Review', $workflowId]);
+            $pdo->prepare('UPDATE permit_workflows SET current_round = ? WHERE id = ?')
+                ->execute([$nextRound, $workflowId]);
 
 logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRound to workflow ID $workflowId");
             jsonResponse(['success' => true, 'round' => $nextRound, 'message' => "Round $nextRound added."]);
@@ -305,10 +305,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $maxRound = $pdo->prepare('SELECT MAX(round_number) AS max_round FROM workflow_rounds WHERE workflow_id = ?');
             $maxRound->execute([$workflowId]);
             $latestRound = (int)$maxRound->fetchColumn();
-            $stage = $lastOut ? 'Completed' : 'In Progress';
-            $status = $lastOut ? 'Approved' : 'Under Review';
-            $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
-                ->execute([$latestRound, $stage, $status, $workflowId]);
+            $pdo->prepare('UPDATE permit_workflows SET current_round = ? WHERE id = ?')
+                ->execute([$latestRound, $workflowId]);
 
             logActivity($_SESSION['user_id'], 'workflow_round_updated', "Updated round $roundNumber for workflow ID $workflowId");
             jsonResponse(['success' => true, 'message' => "Round $roundNumber updated."]);
@@ -328,17 +326,34 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $latestRound = (int)$maxRound->fetchColumn();
             $newStatus = 'Under Review';
             $newStage = 'In Progress';
-            if ($latestRound > 0) {
-                $latestRoundData = $pdo->prepare('SELECT last_out FROM workflow_rounds WHERE workflow_id = ? AND round_number = ?');
-                $latestRoundData->execute([$workflowId, $latestRound]);
-                $lr = $latestRoundData->fetch();
-                if ($lr && $lr['last_out']) { $newStatus = 'Approved'; $newStage = 'Completed'; }
-            }
             $pdo->prepare('UPDATE permit_workflows SET current_round = ?, current_stage = ?, status = ? WHERE id = ?')
                 ->execute([$latestRound ?: 1, $newStage, $newStatus, $workflowId]);
 
             logActivity($_SESSION['user_id'], 'workflow_round_deleted', "Deleted round $roundNumber from workflow ID $workflowId");
             jsonResponse(['success' => true, 'message' => "Round $roundNumber deleted."]);
+
+        case 'workflow/update-status':
+            requirePermission('permit-workflow');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $workflowId = (int)($data['workflow_id'] ?? 0);
+            $status = normalizeWorkflowStatus($data['status'] ?? '');
+            $stage = trim($data['stage'] ?? '');
+
+            if (!$workflowId) jsonResponse(['error' => 'Workflow ID required.'], 422);
+            $allowedStatus = ['Pending', 'Under Review', 'Approved', 'Disapproved', 'Released'];
+            if (!in_array($status, $allowedStatus, true)) jsonResponse(['error' => 'Invalid status.'], 422);
+            $allowedStage = ['Pending', 'In Progress', 'Completed'];
+            if ($stage && !in_array($stage, $allowedStage, true)) jsonResponse(['error' => 'Invalid stage.'], 422);
+
+            if ($stage) {
+                $pdo->prepare('UPDATE permit_workflows SET status = ?, current_stage = ? WHERE id = ?')
+                    ->execute([$status, $stage, $workflowId]);
+            } else {
+                $pdo->prepare('UPDATE permit_workflows SET status = ? WHERE id = ?')
+                    ->execute([$status, $workflowId]);
+            }
+            logActivity($_SESSION['user_id'], 'workflow_status_updated', "Updated workflow ID $workflowId status to $status");
+            jsonResponse(['success' => true, 'message' => "Workflow status set to $status."]);
 
         /* =====================================================================
             PERMIT APPROVAL  (table: permit_approvals)

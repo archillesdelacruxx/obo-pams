@@ -816,8 +816,12 @@ function openAddRoundModal(data) {
     const res = await apiPost('workflow', 'add-round', { workflow_id: data.id, last_in: lastIn, last_out: lastOut, no_last_out: noLastOut ? 1 : 0, remarks });
     if (res.success) {
       closeUserModal();
-      showToast({ title: 'Round added', message: `Round ${nextRound} added to ${data.application_no}.`, type: 'success' });
-      setTimeout(() => window.location.reload(), 500);
+      if (lastOut) {
+        confirmApproveStatus(data.id, nextRound);
+      } else {
+        showToast({ title: 'Round added', message: `Round ${nextRound} added to ${data.application_no}.`, type: 'success' });
+        setTimeout(() => window.location.reload(), 500);
+      }
     } else {
       showToast({ title: 'Error', type: 'danger', message: res.error || 'Failed to add round.' });
     }
@@ -868,7 +872,15 @@ async function editRound(workflowId, roundNumber) {
     const lastOut = noLastOut ? null : ($('#editRoundOut')?.value || null);
     const remarks = $('#editRoundRemarks')?.value.trim() || '';
     const upd = await apiPost('workflow', 'update-round', { workflow_id: workflowId, round_number: roundNumber, last_in: lastIn, last_out: lastOut, no_last_out: noLastOut ? 1 : 0, remarks });
-    if (upd.success) { closeUserModal(); showToast({ title: 'Updated', type: 'success', message: `Round ${roundNumber} updated.` }); setTimeout(() => window.location.reload(), 500); }
+    if (upd.success) {
+      closeUserModal();
+      if (lastOut) {
+        confirmApproveStatus(workflowId, roundNumber);
+      } else {
+        showToast({ title: 'Updated', type: 'success', message: `Round ${roundNumber} updated.` });
+        setTimeout(() => window.location.reload(), 500);
+      }
+    }
     else { showToast({ title: 'Error', type: 'danger', message: upd.error || 'Failed to update round.' }); }
   });
 }
@@ -878,6 +890,29 @@ async function deleteRound(workflowId, roundNumber) {
   const res = await apiPost('workflow', 'delete-round', { workflow_id: workflowId, round_number: roundNumber });
   if (res.success) { showToast({ title: 'Deleted', type: 'success', message: `Round ${roundNumber} deleted.` }); setTimeout(() => window.location.reload(), 500); }
   else { showToast({ title: 'Error', type: 'danger', message: res.error || 'Failed to delete round.' }); }
+}
+
+function confirmApproveStatus(workflowId, roundNumber) {
+  openUserModal(`
+    <div class="modal-head"><h3>Round ${roundNumber} is complete</h3><button class="icon-btn" data-close-modal aria-label="Close">${userIcon('x')}</button></div>
+    <div class="modal-body">
+      <p>This round has a last out date. Change the workflow status to <strong>Approved</strong>?</p>
+    </div>
+    <div class="modal-foot"><button class="btn btn-secondary" id="cancelApproveStatusBtn">Cancel</button><button class="btn btn-primary" id="confirmApproveStatusBtn">${userIcon('check')} Approve</button></div>`);
+  $('#confirmApproveStatusBtn')?.addEventListener('click', async () => {
+    const res = await apiPost('workflow', 'update-status', { workflow_id: workflowId, status: 'Approved', stage: 'Completed' });
+    closeUserModal();
+    if (res.success) {
+      showToast({ title: 'Approved', type: 'success', message: 'Workflow marked as Approved.' });
+    } else {
+      showToast({ title: 'Error', type: 'danger', message: res.error || 'Failed to update status.' });
+    }
+    setTimeout(() => window.location.reload(), 500);
+  });
+  $('#cancelApproveStatusBtn')?.addEventListener('click', () => {
+    closeUserModal();
+    setTimeout(() => window.location.reload(), 300);
+  });
 }
 
 /* ==========================================================================
