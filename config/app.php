@@ -10,7 +10,7 @@ define('ENCRYPTION_KEY', getenv('ENCRYPTION_KEY') ?: 'a1b2c3d4e5f6g7h8i9j0k1l2m3
 define('ENCRYPTION_METHOD', 'aes-256-cbc');
 define('SESSION_LIFETIME', 7200);
 define('LOGIN_MAX_ATTEMPTS', 6);
-define('LOGIN_LOCK_MINUTES', 15);
+define('LOGIN_LOCK_MINUTES', 5);
 
 define('MODULES', [
     'dashboard'              => 'Dashboard',

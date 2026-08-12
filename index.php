@@ -7,6 +7,8 @@ if (isAuthenticated()) {
     redirect($redirect);
 }
 
+$lockInfo = getSessionLockout();
+
 $error = '';
 $successRedirect = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -23,12 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = $result['error'];
         }
     }
+    $lockInfo = getSessionLockout();
 
     if (isAjaxRequest()) {
         jsonResponse([
             'success' => !empty($successRedirect),
             'redirect' => $successRedirect,
-            'error' => $error
+            'error' => $error,
+            'locked' => $lockInfo['locked'] ?? false,
+            'locked_until' => $lockInfo['until'] ?? null,
+            'locked_username' => $lockInfo['username'] ?? ''
         ]);
     }
 }
@@ -97,13 +103,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php echo getCSRFField(); ?>
         <div class="form-group">
           <label for="username">Username</label>
-          <input class="form-control" type="text" id="username" name="username" placeholder="e.g. msantiago.admin" autocomplete="username" value="<?php echo escape($_POST['username'] ?? ''); ?>">
+          <input class="form-control" type="text" id="username" name="username" placeholder="e.g. msantiago.admin" autocomplete="username" value="<?php echo escape($_POST['username'] ?? ($lockInfo['locked'] ? $lockInfo['username'] : '')); ?>"<?php echo $lockInfo['locked'] ? ' disabled' : ''; ?>>
         </div>
         <div class="form-group">
           <label for="password">Password</label>
           <div class="input-affix">
-            <input class="form-control" type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password">
-            <button type="button" id="pwToggle" aria-label="Show password">
+            <input class="form-control" type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password"<?php echo $lockInfo['locked'] ? ' disabled' : ''; ?>>
+            <button type="button" id="pwToggle" aria-label="Show password"<?php echo $lockInfo['locked'] ? ' disabled' : ''; ?>>
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" />
                 <circle cx="12" cy="12" r="3" />
@@ -117,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </label>
           <a href="#" id="forgotLink">Forgot password?</a>
         </div>
-        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn"<?php echo $lockInfo['locked'] ? ' disabled' : ''; ?>>
           <span id="loginBtnText">Sign In</span>
         </button>
       </form>
@@ -147,6 +153,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-wrap" id="lockModal" data-locked="<?php echo $lockInfo['locked'] ? '1' : '0'; ?>" data-until="<?php echo (int)($lockInfo['until'] ?? 0); ?>">
+    <div class="backdrop"></div>
+    <div class="modal-box sm confirm-modal lock-modal">
+      <div class="modal-head">
+        <h3>Account temporarily locked</h3>
+      </div>
+      <div class="modal-body">
+        <div class="c-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+        <h3>Too many failed attempts</h3>
+        <p>Too many failed login attempts. Please wait <strong id="lockCountdown">05:00</strong> before trying again.</p>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-danger" disabled>Locked</button>
       </div>
     </div>
   </div>
@@ -194,6 +221,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             errorBox.classList.add('show');
             $('#loginErrorText').textContent = data.error || 'Invalid username or password.';
             resetBtn();
+            if (data.locked && data.locked_until) {
+              openLockModal(Number(data.locked_until));
+            }
           }
         } catch (err) {
           errorBox.classList.add('show');
@@ -212,6 +242,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       forgotModal.querySelectorAll('[data-close-modal]').forEach(el => {
         el.addEventListener('click', () => forgotModal.classList.remove('open'));
       });
+
+      const lockModal = $('#lockModal');
+      let lockTimer = null;
+
+      const pad2 = (n) => String(n).padStart(2, '0');
+
+      const renderLockCountdown = (remaining) => {
+        const el = $('#lockCountdown');
+        if (!el) return;
+        el.textContent = `${pad2(Math.floor(remaining / 60))}:${pad2(remaining % 60)}`;
+      };
+
+      const setFormLocked = (locked) => {
+        if (usernameEl) usernameEl.disabled = locked;
+        if (passwordEl) passwordEl.disabled = locked;
+        const btn = $('#loginBtn');
+        if (btn) btn.disabled = locked;
+      };
+
+      const closeLockModal = () => {
+        if (!lockModal) return;
+        lockModal.classList.remove('open');
+        if (lockTimer) { clearInterval(lockTimer); lockTimer = null; }
+        setFormLocked(false);
+      };
+
+      const openLockModal = (until) => {
+        if (!lockModal) return;
+        lockModal.dataset.until = until;
+        lockModal.classList.add('open');
+        setFormLocked(true);
+        if (lockTimer) clearInterval(lockTimer);
+        const tick = () => {
+          const remaining = Math.max(0, Math.ceil(until - Date.now() / 1000));
+          renderLockCountdown(remaining);
+          if (remaining <= 0) closeLockModal();
+        };
+        tick();
+        lockTimer = setInterval(tick, 1000);
+      };
+
+      if (lockModal && Number(lockModal.dataset.locked) === 1) {
+        const until = Number(lockModal.dataset.until || 0);
+        if (until > Date.now() / 1000) openLockModal(until);
+      }
     });
   </script>
 </body>

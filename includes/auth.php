@@ -13,6 +13,7 @@ function authenticate(string $username, string $password): array {
     if ($lockout['locked_until']) {
         $mins = max(1, (int)ceil((strtotime($lockout['locked_until']) - time()) / 60));
         logActivity(null, 'login_blocked', "Login attempt blocked for locked username: $username");
+        setSessionLockout($username, $lockout['locked_until']);
         return ['success' => false, 'error' => "Account temporarily locked. Too many failed attempts. Try again in $mins minute(s)."];
     }
 
@@ -27,6 +28,7 @@ function authenticate(string $username, string $password): array {
         if ($lockout['locked_until']) {
             $mins = max(1, (int)ceil((strtotime($lockout['locked_until']) - time()) / 60));
             logActivity(null, 'account_locked', "Account locked after repeated failures: $username");
+            setSessionLockout($username, $lockout['locked_until']);
             return ['success' => false, 'error' => "Too many failed attempts. Account locked for $mins minute(s)."];
         }
         return ['success' => false, 'error' => 'Invalid username or password.'];
@@ -38,6 +40,7 @@ function authenticate(string $username, string $password): array {
     }
 
     clearLoginFailures($username);
+    unset($_SESSION['login_lock']);
 
     $permStmt = $pdo->prepare('SELECT module_key, is_granted FROM user_permissions WHERE user_id = ?');
     $permStmt->execute([$user['id']]);
@@ -91,6 +94,24 @@ function recordLoginFailure(string $username): void {
 function clearLoginFailures(string $username): void {
     $pdo = getDB();
     $pdo->prepare('DELETE FROM login_attempts WHERE username = ?')->execute([$username]);
+}
+
+function setSessionLockout(string $username, string $lockedUntil): void {
+    startSession();
+    $_SESSION['login_lock'] = ['username' => $username, 'until' => strtotime($lockedUntil)];
+}
+
+function getSessionLockout(): array {
+    startSession();
+    if (empty($_SESSION['login_lock'])) return ['locked' => false];
+    $lock = $_SESSION['login_lock'];
+    $until = (int)($lock['until'] ?? 0);
+    $remaining = $until - time();
+    if ($remaining <= 0) {
+        unset($_SESSION['login_lock']);
+        return ['locked' => false];
+    }
+    return ['locked' => true, 'username' => $lock['username'] ?? '', 'remaining' => $remaining, 'until' => $until];
 }
 
 function refreshUserPermissions(): array {

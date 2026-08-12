@@ -52,6 +52,20 @@ body.login-body{
 .login-divider::before,.login-divider::after{content:''; flex:1; height:1px; background:var(--gray-200);}
 .login-footnote{text-align:center; font-size:12px; color:var(--gray-400); margin-top:6px;}
 
+.lock-modal .modal-head{
+  background:linear-gradient(135deg, #A52323, var(--danger));
+}
+.lock-modal .modal-head h3{color:#fff;}
+.lock-modal .c-icon{
+  background:var(--danger-light); color:var(--danger);
+}
+.lock-modal .modal-body h3{color:var(--danger);}
+.lock-modal .modal-body p strong{
+  color:var(--danger); font-size:18px; font-family:var(--font-mono); letter-spacing:.02em;
+}
+.lock-modal .modal-foot{border-top-color:var(--danger-light); background:#FDF4F4;}
+.lock-modal .btn-danger{background:var(--danger); border-color:var(--danger); color:#fff;}
+
 @media (max-width:840px){
   .login-shell{grid-template-columns:1fr;}
   .login-visual{display:none;}

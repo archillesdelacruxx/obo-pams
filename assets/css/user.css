@@ -329,13 +329,13 @@
 }
 
 .badge-workflow.completed {
-  background: #3B82F6;
+  background: #22A55A;
   color: #FFFFFF;
   font-weight: 700;
 }
 
 .badge-workflow.in-progress {
-  background: #F97316;
+  background: #5B8DEF;
   color: #FFFFFF;
   font-weight: 700;
 }
@@ -345,7 +345,7 @@
 }
 
 .badge-workflow.released {
-  background: #22A55A;
+  background: #8A94A6;
   color: #FFFFFF;
   font-weight: 700;
 }
