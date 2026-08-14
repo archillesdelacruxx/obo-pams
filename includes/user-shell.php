@@ -22,7 +22,8 @@ function getUserNavItems(): array {
 
 function renderUserSidebar(string $activeKey): string {
     $items = getUserNavItems();
-    $isAdmin = !empty($_SESSION['is_admin']);
+    $role = $_SESSION['role'] ?? 'inspector';
+    $isAdmin = !empty($_SESSION['is_admin']) && $role !== 'admin_aid';
     $perms = [];
     if (!$isAdmin) {
         try {
@@ -36,6 +37,18 @@ function renderUserSidebar(string $activeKey): string {
     }
 
     $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
+
+    // Load module availability statuses
+    $moduleStatuses = [];
+    try {
+        $pdo = getDB();
+        $statusStmt = $pdo->prepare("SELECT setting_key, setting_value FROM system_settings WHERE setting_key LIKE 'module_%'");
+        $statusStmt->execute();
+        while ($sr = $statusStmt->fetch()) {
+            $moduleStatuses[str_replace('module_', '', $sr['setting_key'])] = $sr['setting_value'];
+        }
+    } catch (Exception $e) { /* ignore */ }
+
     $navAllowed = function (string $key) use ($isAdmin, $alwaysVisible, $perms): bool {
         if ($isAdmin) return true;
         if (in_array($key, $alwaysVisible, true)) return true;
@@ -54,10 +67,12 @@ function renderUserSidebar(string $activeKey): string {
         foreach ($sectionItems as $item) {
             $active = $item['key'] === $activeKey ? ' active' : '';
             $granted = $navAllowed($item['key']);
+            $isUnderDev = ($moduleStatuses[$item['key']] ?? 'active') === 'under_development';
             $icon = getNavIcon($item['icon']);
-            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($item['page']) . '" data-module-key="' . escape($item['key']) . '" href="' . escape($item['page']) . '" tabindex="0" aria-label="' . escape($item['label']) . '"' . ($granted ? '' : ' hidden') . '>'
+            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($item['page']) . '" data-module-key="' . escape($item['key']) . '"' . ($isUnderDev ? ' data-under-dev="1"' : '') . ' href="' . escape($item['page']) . '" tabindex="0" aria-label="' . escape($item['label']) . '"' . ($granted ? '' : ' hidden') . '>'
                 . $icon
                 . '<span class="label">' . escape($item['label']) . '</span>'
+                . ($isUnderDev ? '<span class="badge" style="font-size:9px;background:var(--warning,#eab308);color:#000;margin-left:auto;padding:1px 5px;border-radius:4px;">Dev</span>' : '')
                 . ($item['key'] === 'notifications' ? '<span class="count" id="sidebarNotifBadge" style="display:none;">0</span>' : '')
                 . '</a>';
         }
@@ -84,7 +99,7 @@ function renderUserSidebar(string $activeKey): string {
                 <div class="avatar sm">' . $avatarHtml . '</div>
                 <div class="info">
                     <strong>' . escape($name) . '</strong>
-                    <span>' . ($isAdmin ? 'Administrator' : 'User') . '</span>
+                    <span>' . ($_SESSION['role'] === 'admin_aid' ? 'Admin Aid' : ($_SESSION['role'] === 'admin' ? 'Administrator' : ($_SESSION['role'] === 'developer' ? 'Developer' : 'Inspector'))) . '</span>
                 </div>
             </div>
         </div>

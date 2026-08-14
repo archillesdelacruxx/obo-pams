@@ -356,6 +356,14 @@ async function initUserManagementPage(){
       : '<span class="badge badge-neutral">Inactive</span>';
   };
 
+  const roleBadge = (r) => {
+    const role = (r || 'inspector').toLowerCase();
+    if (role === 'developer') return '<span class="badge" style="background:#7c3aed;color:#fff;">Developer</span>';
+    if (role === 'admin') return '<span class="badge badge-info">Admin</span>';
+    if (role === 'admin_aid') return '<span class="badge" style="background:#0ea5e9;color:#fff;">Admin Aid</span>';
+    return '<span class="badge badge-neutral">Inspector</span>';
+  };
+
   const renderRows = (rows) => {
     tbody.innerHTML = rows.map(u => {
       const modules = u.granted_modules ? u.granted_modules.split(',').filter(Boolean) : [];
@@ -364,6 +372,7 @@ async function initUserManagementPage(){
           <div class="avatar sm">${initials(u.full_name)}</div>
           <div><strong>${escapeHtml(u.full_name)}</strong><span>@${escapeHtml(u.username || '')}</span></div>
         </td>
+        <td>${roleBadge(u.role)}</td>
         <td>${statusBadge(u.is_active)}</td>
         <td><div class="module-tags">${modules.length ? modules.map(m => `<span class="module-tag">${escapeHtml(m)}</span>`).join('') : '<span class="text-muted">—</span>'}</div></td>
         <td>${u.last_login ? u.last_login : '—'}</td>
@@ -594,6 +603,37 @@ async function initSettingsPage(){
       showToast({ title: 'Settings saved', message: 'General system settings have been updated.', type: 'success' });
     } catch (err) {
       showToast({ title: 'Error', message: 'Failed to save settings.', type: 'error' });
+    }
+  });
+
+  loadAiSettings();
+}
+
+async function loadAiSettings() {
+  const form = $('#aiSettingsForm');
+  if (!form) return;
+  const statusEl = $('#aiStatusText');
+  try {
+    const res = await apiGet('settings', 'ai-get');
+    const cfg = res.data || {};
+    $('#aiApiKey').value = cfg.ai_api_key || '';
+    if (statusEl) statusEl.textContent = cfg.ai_api_key ? 'AI is configured.' : 'AI not configured — button hidden.';
+  } catch (err) { /* ignore */ }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await apiPost('settings', 'ai-save', {
+        ai_api_key: $('#aiApiKey').value.trim()
+      });
+      if (res.success) {
+        showToast({ title: 'AI settings saved', message: 'AI Remark Assistant updated.', type: 'success' });
+        if (statusEl) statusEl.textContent = $('#aiApiKey').value.trim() ? 'AI is configured.' : 'AI not configured — button hidden.';
+      } else {
+        showToast({ title: 'Error', message: res.error, type: 'error' });
+      }
+    } catch (err) {
+      showToast({ title: 'Error', message: 'Failed to save AI settings.', type: 'error' });
     }
   });
 }

@@ -88,9 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     redirect('user-management.php');
 }
 
-$users = $pdo->query("SELECT id, full_name, username, email, profile_photo, is_admin, CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END AS status, last_login, created_at FROM users ORDER BY full_name")->fetchAll();
-$admins = array_values(array_filter($users, fn($u) => (int)$u['is_admin'] === 1));
-$oboUsers = array_values(array_filter($users, fn($u) => (int)$u['is_admin'] !== 1));
+$users = $pdo->query("SELECT id, full_name, username, email, profile_photo, is_admin, role, position, CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END AS status, last_login, created_at FROM users ORDER BY full_name")->fetchAll();
+$admins = array_values(array_filter($users, fn($u) => ($u['role'] ?? '') === 'admin'));
+$oboUsers = array_values(array_filter($users, fn($u) => ($u['role'] ?? '') !== 'admin'));
 
 $permStmt = $pdo->query('SELECT user_id, module_key FROM user_permissions WHERE is_granted = 1');
 $allPerms = [];
@@ -108,6 +108,11 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
         $statusBadge = $u['status'] === 'active'
             ? '<span class="badge badge-success">Active</span>'
             : '<span class="badge badge-neutral">Inactive</span>';
+        $role = $u['role'] ?? 'inspector';
+        $roleBadge = $role === 'developer' ? '<span class="badge" style="background:#7c3aed;color:#fff;">Developer</span>'
+            : ($role === 'admin' ? '<span class="badge badge-info">Admin</span>'
+            : ($role === 'admin_aid' ? '<span class="badge" style="background:#0ea5e9;color:#fff;">Admin Aid</span>'
+            : '<span class="badge badge-neutral">Inspector</span>'));
         $moduleCell = '';
         if ($showModules) {
             $moduleTags = implode('', array_map(fn($m) => '<span class="module-tag">' . escape($m) . '</span>', array_slice($moduleLabels, 0, 3)));
@@ -116,14 +121,23 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
             }
             $moduleCell = '<td><div class="module-tags">' . $moduleTags . '</div></td>';
         }
+        $positionLabels = [
+            'admin_aid_ii' => 'Admin Aid II',
+            'pdo_ii' => 'Project Development Officer II',
+            'head_admin' => 'Head Administrator',
+            'engineer_i' => 'Engineer I',
+            'architect_i' => 'Architect I',
+            'evaluator' => 'Evaluator',
+        ];
+        $positionLabel = $positionLabels[$u['position'] ?? ''] ?? ($u['position'] ?? '—');
         $html .= '<tr data-id="' . $u['id'] . '">'
             . '<td class="cell-user">'
             . '<div class="avatar sm">' . escape($initials) . '</div>'
             . '<div><strong>' . escape($u['full_name']) . '</strong><span>@' . escape($u['username']) . '</span></div>'
             . '</td>'
-            . '<td>' . $statusBadge . '</td>'
+            . '<td>' . escape($positionLabel) . '</td>'
+            . '<td>' . $roleBadge . '</td>'
             . $moduleCell
-            . '<td>' . ($u['last_login'] ? timeAgo($u['last_login']) : 'Never') . '</td>'
             . '<td><div class="row-actions">'
             . '<button class="icon-btn view-user-btn" data-id="' . $u['id'] . '" aria-label="View">'
             . '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
@@ -165,6 +179,19 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
 .user-detail-head{display:flex;align-items:center;gap:16px;margin-bottom:4px;}
 .user-detail-photo{width:72px;height:72px;border-radius:50%;object-fit:cover;flex-shrink:0;background:linear-gradient(135deg,var(--color-primary-400),var(--color-primary-700));color:#fff;font-size:24px;font-weight:700;font-family:var(--font-display);display:flex;align-items:center;justify-content:center;}
 .assigned-modules{margin-top:4px;}
+.tl-modal-hero{display:flex;align-items:center;gap:14px;padding:14px 16px;margin:-20px -24px 18px;background:linear-gradient(135deg,#eff6ff 0%,#f8fafc 100%);border-bottom:1px solid var(--gray-100);}
+.tl-modal-icon{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,var(--color-primary-500),var(--color-primary-700));color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 6px 14px rgba(37,99,235,.28);}
+.tl-modal-hero h4{margin:0;font-size:14px;font-weight:700;color:var(--gray-800);}
+.tl-modal-hero p{margin:2px 0 0;font-size:12px;color:var(--gray-500);}
+.tl-team-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.tl-team-card{border:1.5px solid var(--gray-200);border-radius:var(--radius-lg);padding:14px;text-align:center;cursor:pointer;transition:all .15s ease;background:#fff;}
+.tl-team-card:hover{border-color:var(--color-primary-300);background:#f8faff;}
+.tl-team-card.selected{border-color:var(--color-primary-500);background:var(--color-primary-50,#eff6ff);box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+.tl-team-card .tl-team-dot{width:34px;height:34px;border-radius:10px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;background:linear-gradient(135deg,var(--color-primary-400),var(--color-primary-600));}
+.tl-team-card.t2 .tl-team-dot{background:linear-gradient(135deg,var(--color-primary-500),var(--color-primary-700));}
+.tl-team-card strong{display:block;font-size:13px;color:var(--gray-800);}
+.tl-team-card small{font-size:11px;color:var(--gray-500);}
+.tl-field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;}
 </style>
 </head>
 <body data-page="admin-users">
@@ -183,10 +210,16 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
             <h1>User Management</h1>
             <p class="subtitle"><span id="userCount"><?php echo count($users); ?></span> registered accounts Â· control module access instead of fixed roles.</p>
           </div>
-          <button class="btn btn-primary" id="createUserBtn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-            Create User
-          </button>
+          <div class="flex gap-sm" style="align-items:flex-end;">
+            <button class="btn btn-primary" id="createUserBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+              Create User
+            </button>
+            <button class="btn btn-primary" id="createTeamLeaderBtn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Register Team Leader
+            </button>
+          </div>
         </div>
 
         <div class="section-card">
@@ -195,11 +228,6 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="usersSearch" placeholder="Search usersâ€¦">
             </div>
-            <select id="statusFilter">
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
           </div>
         </div>
 
@@ -211,7 +239,7 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
           <div class="scroll-x">
             <table class="data-table">
               <thead>
-                <tr><th>User</th><th>Status</th><th>Last Login</th><th>Action</th></tr>
+                <tr><th>User</th><th>Position</th><th>Role</th><th>Action</th></tr>
               </thead>
               <tbody id="adminsTableBody" class="users-tbody">
                 <?php echo renderUserRows($admins, $allPerms, false, count($admins) > 1); ?>
@@ -228,15 +256,33 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
           <div class="scroll-x">
             <table class="data-table">
               <thead>
-                <tr><th>User</th><th>Status</th><th>Assigned Modules</th><th>Last Login</th><th>Action</th></tr>
+                <tr><th>User</th><th>Position</th><th>Role</th><th>Assigned Modules</th><th>Action</th></tr>
               </thead>
               <tbody id="oboTableBody" class="users-tbody">
                 <?php echo renderUserRows($oboUsers, $allPerms); ?>
               </tbody>
             </table>
           </div>
-          <div class="table-footer">
+<div class="table-footer">
             <span class="text-xs text-muted">Showing all registered accounts</span>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <div class="section-head">
+            <h3>Team Leaders</h3>
+            <span class="badge badge-neutral" id="teamLeaderCount">0</span>
+          </div>
+          <div class="scroll-x">
+            <table class="data-table">
+              <thead>
+                <tr><th>Name</th><th>Position</th><th>Team</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="teamLeaderTableBody"></tbody>
+            </table>
+          </div>
+          <div class="table-footer">
+            <span class="text-xs text-muted">Team leaders appear in the Inspection Checklist as INSPECTED BY members.</span>
           </div>
         </div>
       </main>
@@ -255,7 +301,7 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
   <script>
   const MODULES_LIST = <?php echo json_encode(array_map(fn($k, $v) => ['key' => $k, 'label' => $v], array_keys(MODULES), MODULES)); ?>;
   const USERS_DATA = <?php echo json_encode(array_map(function($u) use ($allPerms) {
-    return ['id' => (int)$u['id'], 'full_name' => $u['full_name'], 'username' => $u['username'], 'email' => $u['email'], 'profile_photo' => $u['profile_photo'], 'status' => $u['status'], 'is_admin' => (int)$u['is_admin'], 'modules' => $allPerms[$u['id']] ?? []];
+    return ['id' => (int)$u['id'], 'full_name' => $u['full_name'], 'username' => $u['username'], 'email' => $u['email'], 'profile_photo' => $u['profile_photo'], 'status' => $u['status'], 'is_admin' => (int)$u['is_admin'], 'role' => $u['role'] ?? 'inspector', 'position' => $u['position'] ?? '', 'modules' => $allPerms[$u['id']] ?? []];
   }, $users)); ?>;
   const CSRF_TOKEN = '<?php echo generateCSRFToken(); ?>';
   const CURRENT_USER_ID = <?php echo (int)$_SESSION['user_id']; ?>;
@@ -342,19 +388,48 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
       + '</div>'
       + (isNew ? '<div class="form-group full">'
         + '<label>Default Password</label>'
+        + '<input type="hidden" name="password" value="12345">'
         + '<input class="form-control" value="12345" disabled>'
         + '<p class="text-xs text-muted" style="margin-top:4px;">Default password is <strong>12345</strong>. The user can change it from their own profile.</p>'
         + '</div>' : '')
       + (isNew ? '<div class="form-group">'
         + '<label>Role</label>'
         + '<select class="form-control" name="role" id="userRoleSelect">'
-        + '<option value="obo_user" selected>OBO User</option>'
+        + '<option value="inspector" selected>Inspector</option>'
+        + '<option value="admin_aid">Admin Aid</option>'
         + '<option value="admin">Admin</option>'
+        + '<option value="developer">Developer</option>'
+        + '</select></div>'
+        + '<div class="form-group">'
+        + '<label>Position</label>'
+        + '<select class="form-control" name="position" id="userPositionSelect">'
+        + '<option value="" selected>Select position</option>'
+        + '<option value="admin_aid_ii">Admin Aid II</option>'
+        + '<option value="pdo_ii">Project Development Officer II</option>'
+        + '<option value="head_admin">Head Administrator</option>'
+        + '<option value="engineer_i">Engineer I</option>'
+        + '<option value="architect_i">Architect I</option>'
+        + '<option value="evaluator">Evaluator</option>'
         + '</select></div>' : '')
       + (!isNew ? '<div class="form-group">'
         + '<label>Role</label>'
-        + '<input class="form-control" value="' + (user.is_admin ? 'Admin' : 'OBO User') + '" disabled>'
-        + '</div>' : '')
+        + '<select class="form-control" name="role" id="userRoleSelect">'
+        + '<option value="inspector"' + (user && user.role === 'inspector' ? ' selected' : '') + '>Inspector</option>'
+        + '<option value="admin_aid"' + (user && user.role === 'admin_aid' ? ' selected' : '') + '>Admin Aid</option>'
+        + '<option value="admin"' + (user && user.role === 'admin' ? ' selected' : '') + '>Admin</option>'
+        + '<option value="developer"' + (user && user.role === 'developer' ? ' selected' : '') + '>Developer</option>'
+        + '</select></div>'
+        + '<div class="form-group">'
+        + '<label>Position</label>'
+        + '<select class="form-control" name="position" id="userPositionSelect">'
+        + '<option value="">Select position</option>'
+        + '<option value="admin_aid_ii"' + (user && user.position === 'admin_aid_ii' ? ' selected' : '') + '>Admin Aid II</option>'
+        + '<option value="pdo_ii"' + (user && user.position === 'pdo_ii' ? ' selected' : '') + '>Project Development Officer II</option>'
+        + '<option value="head_admin"' + (user && user.position === 'head_admin' ? ' selected' : '') + '>Head Administrator</option>'
+        + '<option value="engineer_i"' + (user && user.position === 'engineer_i' ? ' selected' : '') + '>Engineer I</option>'
+        + '<option value="architect_i"' + (user && user.position === 'architect_i' ? ' selected' : '') + '>Architect I</option>'
+        + '<option value="evaluator"' + (user && user.position === 'evaluator' ? ' selected' : '') + '>Evaluator</option>'
+        + '</select></div>' : '')
       + (!isNew && !readOnly ? '<div class="form-group">'
         + '<label>Status</label>'
         + '<select class="form-control" name="status">'
@@ -391,7 +466,7 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
     const moduleSection = document.getElementById('moduleAccessSection');
     if (roleSelect && moduleSection) {
       const applyRole = () => {
-        moduleSection.style.display = roleSelect.value === 'admin' ? 'none' : '';
+        moduleSection.style.display = (roleSelect.value === 'admin' || roleSelect.value === 'developer') ? 'none' : '';
       };
       roleSelect.addEventListener('change', applyRole);
       applyRole();
@@ -431,13 +506,40 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
 
     const saveBtn = document.getElementById('modalSaveBtn');
     if (saveBtn) {
-      saveBtn.addEventListener('click', function() {
+      saveBtn.addEventListener('click', async function() {
         const form = document.getElementById('userForm');
         if (isNew && !form.checkValidity()) {
           form.reportValidity();
           return;
         }
-        form.submit();
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData);
+        const modCheckboxes = document.getElementById('modalModuleList') ? document.getElementById('modalModuleList').querySelectorAll('input[type="checkbox"]') : [];
+        data.modules = Array.from(modCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+        try {
+          if (isNew) {
+            const res = await apiPost('users', 'create', data);
+            if (res.success) {
+              showToast({ title: 'User created', message: 'New account is ready.', type: 'success' });
+              document.getElementById('modalRoot').classList.remove('open');
+              location.reload();
+            } else {
+              showToast({ title: 'Error', message: res.error || 'Failed.', type: 'error' });
+            }
+          } else {
+            data.id = userId;
+            const res = await apiPost('users', 'update', data);
+            if (res.success) {
+              showToast({ title: 'Changes saved', message: 'User updated.', type: 'success' });
+              document.getElementById('modalRoot').classList.remove('open');
+              location.reload();
+            } else {
+              showToast({ title: 'Error', message: res.error || 'Failed.', type: 'error' });
+            }
+          }
+        } catch (err) {
+          showToast({ title: 'Error', message: 'Request failed.', type: 'error' });
+        }
       });
     }
 
@@ -461,7 +563,6 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
 
   function rowHtmlFor(u, showModules, canDelete) {
     const modules = u.modules || [];
-    const status = u.status === 'active' ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Inactive</span>';
     let moduleCell = '';
     if (showModules) {
       const labels = modules.map(k => { const m = MODULES_LIST.find(x => x.key === k); return m ? m.label : k; });
@@ -469,11 +570,25 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
       const extra = labels.length > 3 ? '<span class="module-tag">+' + (labels.length - 3) + '</span>' : '';
       moduleCell = '<td><div class="module-tags">' + shown + extra + '</div></td>';
     }
+    const positionLabels = {
+      'admin_aid_ii': 'Admin Aid II',
+      'pdo_ii': 'Project Development Officer II',
+      'head_admin': 'Head Administrator',
+      'engineer_i': 'Engineer I',
+      'architect_i': 'Architect I',
+      'evaluator': 'Evaluator'
+    };
+    const positionLabel = positionLabels[u.position] || '—';
+    const role = (u.role || 'inspector').toLowerCase();
+    const roleBadge = role === 'developer' ? '<span class="badge" style="background:#7c3aed;color:#fff;">Developer</span>'
+      : role === 'admin' ? '<span class="badge badge-info">Admin</span>'
+      : role === 'admin_aid' ? '<span class="badge" style="background:#0ea5e9;color:#fff;">Admin Aid</span>'
+      : '<span class="badge badge-neutral">Inspector</span>';
     return '<tr data-id="' + u.id + '">'
       + '<td class="cell-user"><div class="avatar sm">' + initialsOf(u.full_name) + '</div><div><strong>' + escapeHtml(u.full_name) + '</strong><span>@' + escapeHtml(u.username) + '</span></div></td>'
-      + '<td>' + status + '</td>'
+      + '<td>' + escapeHtml(positionLabel) + '</td>'
+      + '<td>' + roleBadge + '</td>'
       + moduleCell
-      + '<td>' + (u.last_login ? (typeof timeAgo === 'function' ? timeAgo(u.last_login) : u.last_login) : 'Never') + '</td>'
       + '<td><div class="row-actions">'
       + '<button class="icon-btn view-user-btn" data-id="' + u.id + '" aria-label="View">'
       + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
@@ -582,15 +697,15 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
         document.getElementById('modalBox').innerHTML = html;
         root.classList.add('open');
         root.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', () => root.classList.remove('open')));
-        document.getElementById('deleteConfirmBtn').addEventListener('click', function() {
-          const form = document.createElement('form');
-          form.method = 'POST';
-          form.action = 'user-management.php';
-          form.innerHTML = '<input type="hidden" name="_csrf_token" value="' + CSRF_TOKEN + '">'
-            + '<input type="hidden" name="action" value="delete">'
-            + '<input type="hidden" name="user_id" value="' + id + '">';
-          document.body.appendChild(form);
-          form.submit();
+        document.getElementById('deleteConfirmBtn').addEventListener('click', async function() {
+          const res = await apiPost('users', 'delete', { id: id });
+          if (res.success) {
+            showToast({ title: 'User deleted', message: 'Account removed.', type: 'success' });
+            document.getElementById('modalRoot').classList.remove('open');
+            location.reload();
+          } else {
+            showToast({ title: 'Error', message: res.error || 'Failed.', type: 'error' });
+          }
         });
       });
     });
@@ -601,16 +716,6 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
     const q = input ? input.value.toLowerCase() : '';
     document.querySelectorAll('.users-tbody tr').forEach(row => {
       row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-  }
-
-  function applyStatusFilter() {
-    const filter = document.getElementById('statusFilter');
-    const val = filter ? filter.value : '';
-    document.querySelectorAll('.users-tbody tr').forEach(row => {
-      if (!val) { row.style.display = ''; return; }
-      const statusCell = row.querySelector('td:nth-child(2)');
-      row.style.display = statusCell && statusCell.textContent.toLowerCase().includes(val) ? '' : 'none';
     });
   }
 
@@ -626,13 +731,15 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
         profile_photo: u.profile_photo || '',
         status: u.is_active == 1 ? 'active' : 'inactive',
         is_admin: u.is_admin ? 1 : 0,
+        role: u.role || 'inspector',
+        position: u.position || '',
         modules: u.granted_modules ? u.granted_modules.split(',').filter(Boolean) : []
       }));
       USERS_DATA.length = 0;
       USERS_DATA.push.apply(USERS_DATA, fresh);
 
-      const admins = fresh.filter(u => u.is_admin === 1);
-      const obo = fresh.filter(u => u.is_admin === 0);
+      const admins = fresh.filter(u => (u.role || '') === 'admin');
+      const obo = fresh.filter(u => (u.role || '') !== 'admin');
       const adminsBody = document.getElementById('adminsTableBody');
       const oboBody = document.getElementById('oboTableBody');
       if (adminsBody) adminsBody.innerHTML = admins.map(u => rowHtmlFor(u, false, admins.length > 1)).join('');
@@ -642,9 +749,177 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
       if (countEl) countEl.textContent = fresh.length;
 
       applyUsersSearch();
-      applyStatusFilter();
       bindUserRowActions();
     } catch (e) {}
+  }
+
+let TEAM_LEADERS = [];
+
+  function tlPickTeam(teamNo, el) {
+    const hidden = document.getElementById('tlTeam');
+    if (hidden) hidden.value = String(teamNo);
+    el.closest('.tl-team-grid').querySelectorAll('.tl-team-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function openTeamLeaderModal(leader) {
+    const isNew = !leader;
+    const title = isNew ? 'Register Team Leader' : 'Edit Team Leader';
+    const team = leader ? String(leader.team_no) : '1';
+    const html = '<div class="modal-head">'
+      + '<h3>' + (isNew ? 'New Team Leader' : 'Edit Team Leader') + '</h3>'
+      + '<button class="icon-btn" data-close-modal aria-label="Close">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+      + '</button></div>'
+      + '<div class="modal-body">'
+      + '<div class="tl-modal-hero">'
+      + '<div class="tl-modal-icon">'
+      + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>'
+      + '</div>'
+      + '<div><h4>' + (isNew ? 'Add a leader to the inspection team registry' : 'Update this team leader\'s details') + '</h4>'
+      + '<p>Team leaders appear as INSPECTED BY members on the checklist report.</p>'
+      + '</div></div>'
+      + '<div class="form-grid">'
+      + '<div class="form-group full">'
+      + '<label>Full Name <span class="req">*</span></label>'
+      + '<div class="input-affix" style="position:relative;">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-400);pointer-events:none;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+      + '<input class="form-control" style="padding-left:36px;" id="tlName" value="' + (leader ? escapeHtml(leader.full_name) : '') + '" placeholder="e.g. Engr. Juan Dela Cruz" required>'
+      + '</div></div>'
+      + '<div class="form-group full">'
+      + '<label>Position</label>'
+      + '<div class="input-affix" style="position:relative;">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gray-400);pointer-events:none;"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59A2 2 0 0 0 3.41 11l9.58 9.59a2 2 0 0 0 2.83 0l4.77-4.78a2 2 0 0 0 0-2.82z"/><circle cx="7.5" cy="7.5" r=".5"/></svg>'
+      + '<input class="form-control" style="padding-left:36px;" id="tlPosition" value="' + (leader ? escapeHtml(leader.position || '') : '') + '" placeholder="e.g. Chief Inspector">'
+      + '</div></div>'
+      + '</div>'
+      + '<div style="margin-top:6px;">'
+      + '<label style="display:block;font-size:12px;font-weight:600;color:var(--gray-600);margin-bottom:8px;">Assigned Team</label>'
+      + '<div class="tl-team-grid">'
+      + '<div class="tl-team-card' + (team === '1' ? ' selected' : '') + '" data-team="1" onclick="tlPickTeam(1, this)">'
+      + '<div class="tl-team-dot">1</div><strong>Team 1</strong><small>Lead inspector</small>'
+      + '</div>'
+      + '<div class="tl-team-card t2' + (team === '2' ? ' selected' : '') + '" data-team="2" onclick="tlPickTeam(2, this)">'
+      + '<div class="tl-team-dot">2</div><strong>Team 2</strong><small>Assistant inspector</small>'
+      + '</div>'
+      + '</div>'
+      + '<input type="hidden" id="tlTeam" value="' + team + '">'
+      + '</div></div>'
+      + '<div class="modal-foot">'
+      + '<button class="btn btn-secondary" data-close-modal>Cancel</button>'
+      + '<button class="btn btn-primary" id="tlSaveBtn">' + (isNew ? 'Register Team Leader' : 'Save Changes') + '</button>'
+      + '</div>';
+
+    const root = document.getElementById('modalRoot');
+    document.getElementById('modalBox').innerHTML = html;
+    root.classList.add('open');
+    if (leader) {
+      document.getElementById('tlTeam').value = String(leader.team_no);
+    }
+    root.querySelectorAll('[data-close-modal]').forEach(el => {
+      el.addEventListener('click', () => root.classList.remove('open'));
+    });
+    document.getElementById('tlSaveBtn').addEventListener('click', async function() {
+      const fullName = document.getElementById('tlName').value.trim();
+      if (!fullName) { document.getElementById('tlName').reportValidity(); return; }
+      const payload = {
+        full_name: fullName,
+        position: document.getElementById('tlPosition').value.trim(),
+        team_no: document.getElementById('tlTeam').value
+      };
+      const res = leader
+        ? await apiPost('teamleaders', 'update', { ...payload, id: leader.id })
+        : await apiPost('teamleaders', 'create', payload);
+      if (res.success) {
+        showToast({ title: 'Team Leader ' + (leader ? 'updated' : 'registered'), message: res.message, type: 'success' });
+        root.classList.remove('open');
+        renderTeamLeaders();
+      } else {
+        showToast({ title: 'Error', message: res.error, type: 'danger' });
+      }
+    });
+  }
+
+  function teamLeaderRowHtml(l) {
+    const teamBadge = String(l.team_no) === '2'
+      ? '<span class="badge badge-info">Team 2</span>'
+      : '<span class="badge badge-success">Team 1</span>';
+    const statusBadgeTl = l.is_active == 1
+      ? '<span class="badge badge-success">Active</span>'
+      : '<span class="badge badge-neutral">Inactive</span>';
+    return '<tr data-id="' + l.id + '">'
+      + '<td class="cell-user"><div class="avatar sm">' + initialsOf(l.full_name) + '</div><div><strong>' + escapeHtml(l.full_name) + '</strong></div></td>'
+      + '<td>' + escapeHtml(l.position || '—') + '</td>'
+      + '<td>' + teamBadge + '</td>'
+      + '<td>' + statusBadgeTl + '</td>'
+      + '<td><div class="row-actions">'
+      + '<button class="icon-btn tl-edit-btn" data-id="' + l.id + '" aria-label="Edit">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>'
+      + '</button>'
+      + '<button class="icon-btn tl-delete-btn" data-id="' + l.id + '" aria-label="Delete" style="color:var(--danger);">'
+      + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'
+      + '</button>'
+      + '</div></td></tr>';
+  }
+
+  function renderTeamLeaders() {
+    const body = document.getElementById('teamLeaderTableBody');
+    const count = document.getElementById('teamLeaderCount');
+    if (body) {
+      body.innerHTML = TEAM_LEADERS.map(teamLeaderRowHtml).join('') || '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-400);">No team leaders registered yet.</td></tr>';
+    }
+    if (count) count.textContent = TEAM_LEADERS.length;
+    body && body.querySelectorAll('.tl-edit-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const id = parseInt(this.dataset.id, 10);
+        const l = TEAM_LEADERS.find(x => x.id === id);
+        if (l) openTeamLeaderModal(l);
+      });
+    });
+    body && body.querySelectorAll('.tl-delete-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const id = parseInt(this.dataset.id, 10);
+        const l = TEAM_LEADERS.find(x => x.id === id);
+        if (!l) return;
+        const html = '<div class="modal-head"><h3>Delete Team Leader</h3>'
+          + '<button class="icon-btn" data-close-modal aria-label="Close">'
+          + '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>'
+          + '</button></div>'
+          + '<div class="modal-body">'
+          + '<div style="display:flex;align-items:center;gap:14px;">'
+          + '<div style="width:44px;height:44px;border-radius:12px;background:#fee2e2;color:var(--danger);display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+          + '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/></svg>'
+          + '</div>'
+          + '<div><strong>Delete ' + escapeHtml(l.full_name) + '?</strong>'
+          + '<p class="text-sm text-muted" style="margin:4px 0 0;">This removes them from the team leader registry. Existing reports keep their name.</p>'
+          + '</div></div></div>'
+          + '<div class="modal-foot">'
+          + '<button class="btn btn-secondary" data-close-modal>Cancel</button>'
+          + '<button class="btn btn-danger" id="tlDeleteConfirmBtn">Delete</button></div>';
+        const root = document.getElementById('modalRoot');
+        document.getElementById('modalBox').innerHTML = html;
+        root.classList.add('open');
+        root.querySelectorAll('[data-close-modal]').forEach(el => el.addEventListener('click', () => root.classList.remove('open')));
+        document.getElementById('tlDeleteConfirmBtn').addEventListener('click', async function() {
+          const res = await apiPost('teamleaders', 'delete', { id });
+          if (res.success) {
+            showToast({ title: 'Deleted', message: res.message, type: 'success' });
+            root.classList.remove('open');
+            renderTeamLeaders();
+          } else {
+            showToast({ title: 'Error', message: res.error, type: 'danger' });
+          }
+        });
+      });
+    });
+  }
+
+  async function refreshTeamLeaders() {
+    const res = await apiGet('teamleaders', 'list').catch(() => null);
+    if (res && res.success) {
+      TEAM_LEADERS = res.data.map(l => ({ ...l, team_no: parseInt(l.team_no, 10) }));
+      renderTeamLeaders();
+    }
   }
 
   function bindPageActions() {
@@ -652,6 +927,12 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
     if (createBtn && !createBtn.dataset.umBound) {
       createBtn.dataset.umBound = '1';
       createBtn.addEventListener('click', function() { openUserModal(null, false); });
+    }
+
+    const tlCreateBtn = document.getElementById('createTeamLeaderBtn');
+    if (tlCreateBtn && !tlCreateBtn.dataset.umBound) {
+      tlCreateBtn.dataset.umBound = '1';
+      tlCreateBtn.addEventListener('click', function() { openTeamLeaderModal(null); });
     }
 
     bindUserRowActions();
@@ -662,18 +943,15 @@ function renderUserRows(array $rows, array $allPerms, bool $showModules = true, 
       searchInput.addEventListener('input', applyUsersSearch);
     }
 
-    const statusFilter = document.getElementById('statusFilter');
-    if (statusFilter && !statusFilter.dataset.umBound) {
-      statusFilter.dataset.umBound = '1';
-      statusFilter.addEventListener('change', applyStatusFilter);
-    }
   }
 
-  document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {
     bindPageActions();
+    refreshTeamLeaders();
 
     if (window.PAMS_REALTIME) {
       window.PAMS_REALTIME.register('user-management', renderUserTables, 15000);
+      window.PAMS_REALTIME.register('team-leaders', refreshTeamLeaders, 15000);
     }
   });
   </script>

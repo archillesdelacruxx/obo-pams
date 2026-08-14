@@ -1,40 +1,16 @@
 <?php
 require_once __DIR__ . '/auth.php';
 
-function renderAdminSidebar(string $activeKey): string {
+function renderDevSidebar(string $activeKey): string {
     $basePath = '../';
-    $role = $_SESSION['role'] ?? 'inspector';
-
-    if ($role === 'admin_aid') {
-        $items = [
-            ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
-        ];
-
-        require_once __DIR__ . '/user-shell.php';
-        $userNavByKey = [];
-        foreach (getUserNavItems() as $it) {
-            $userNavByKey[$it['key']] = $it;
-        }
-        $granted = getUserModulePermissions();
-
-        foreach ($userNavByKey as $key => $it) {
-            if ($key === 'dashboard' || in_array($key, ['notifications', 'announcements', 'profile', 'settings'], true)) continue;
-            if (empty($granted[$key])) continue;
-            $items[] = ['key' => $key, 'label' => $it['label'], 'page' => 'user/' . $it['page'], 'icon' => $it['icon']];
-        }
-
-        $items[] = ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'];
-        $items[] = ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'];
-    } else {
-        $items = [
-            ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
-            ['key' => 'reports', 'label' => 'Reports', 'page' => 'reports.php', 'icon' => 'bar-chart'],
-            ['key' => 'users', 'label' => 'User Management', 'page' => 'user-management.php', 'icon' => 'users'],
-            ['key' => 'notifications', 'label' => 'Announcements', 'page' => 'notifications.php', 'icon' => 'megaphone'],
-            ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'],
-            ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'],
-        ];
-    }
+    $items = [
+        ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
+        ['key' => 'activity-logs', 'label' => 'Activity Logs', 'page' => 'activity-logs.php', 'icon' => 'bar-chart'],
+        ['key' => 'notifications', 'label' => 'Announcements', 'page' => 'notifications.php', 'icon' => 'megaphone'],
+        ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'],
+        ['key' => 'module-access', 'label' => 'Module Access', 'page' => 'module-access.php', 'icon' => 'layers'],
+        ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'],
+    ];
 
     $navHtml = '';
     foreach ($items as $item) {
@@ -46,7 +22,7 @@ function renderAdminSidebar(string $activeKey): string {
             . '</a>';
     }
 
-    $name = escape($_SESSION['full_name'] ?? 'Administrator');
+    $name = escape($_SESSION['full_name'] ?? 'Developer');
     $initials = implode('', array_map(fn($n) => strtoupper($n[0]), explode(' ', $name)));
     $initials = substr($initials, 0, 2);
     $profilePic = $_SESSION['profile_pic'] ?? '';
@@ -64,7 +40,7 @@ function renderAdminSidebar(string $activeKey): string {
             </button>
         </div>
         <nav class="sidebar-nav">
-            <div class="sidebar-section-label">Administration</div>
+            <div class="sidebar-section-label">Developer</div>
             ' . $navHtml . '
         </nav>
         <div class="sidebar-footer">
@@ -72,16 +48,16 @@ function renderAdminSidebar(string $activeKey): string {
                 <div class="avatar sm">' . $avatarHtml . '</div>
                 <div class="info">
                     <strong>' . $name . '</strong>
-                    <span>' . ($role === 'admin_aid' ? 'Admin Aid' : 'System Administrator') . '</span>
+                    <span>Developer</span>
                 </div>
             </div>
         </div>
     </aside>';
 }
 
-function renderAdminHeader(string $pageTitle): string {
+function renderDevHeader(string $pageTitle): string {
     $basePath = '../';
-    $name = escape($_SESSION['full_name'] ?? 'Administrator');
+    $name = escape($_SESSION['full_name'] ?? 'Developer');
     $first = explode(' ', $name)[0];
     $last = substr(strrchr($name, ' '), 1) ?: $first;
     $initials = implode('', array_map(fn($n) => strtoupper($n[0]), explode(' ', $name)));
@@ -107,7 +83,7 @@ function renderAdminHeader(string $pageTitle): string {
                     <div class="avatar sm">' . $avatarHtml . '</div>
                     <div class="info">
                         <strong>' . $first . ' ' . $last . '</strong>
-                        <span>' . ($_SESSION['role'] === 'admin_aid' ? 'Admin Aid' : 'Administrator') . '</span>
+                        <span>Developer</span>
                     </div>
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </div>

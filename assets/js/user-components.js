@@ -300,6 +300,22 @@ function initUserNavRouting() {
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-user-nav]');
     if (!el) return;
+    if (el.dataset.underDev === '1') {
+      e.preventDefault();
+      e.stopPropagation();
+      const label = el.querySelector('.label')?.textContent || el.getAttribute('aria-label') || 'This module';
+      openModal(`
+        <div class="modal-head"><h3>Under Development</h3><button class="icon-btn" data-close-modal><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+        <div class="modal-body" style="text-align:center;padding:32px 24px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:#fef3c7;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#d97706" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3 style="margin:0 0 8px;">${escapeHtml(label)}</h3>
+          <p class="text-sm text-muted">This module is currently under development. Please check back later.</p>
+        </div>
+        <div class="modal-foot"><button class="btn btn-secondary" data-close-modal>Close</button></div>`);
+      return;
+    }
     const page = el.dataset.userNav;
     if (!page) return;
     window.location.href = page;

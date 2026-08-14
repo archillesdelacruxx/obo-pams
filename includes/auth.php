@@ -17,7 +17,7 @@ function authenticate(string $username, string $password): array {
         return ['success' => false, 'error' => "Account temporarily locked. Too many failed attempts. Try again in $mins minute(s)."];
     }
 
-    $stmt = $pdo->prepare('SELECT id, full_name, username, email, password_hash, profile_photo, is_active, is_admin FROM users WHERE username = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, full_name, username, email, password_hash, profile_photo, is_active, is_admin, role FROM users WHERE username = ? LIMIT 1');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
@@ -57,6 +57,7 @@ function authenticate(string $username, string $password): array {
     $_SESSION['email'] = $user['email'];
     $_SESSION['profile_pic'] = $user['profile_photo'];
     $_SESSION['is_admin'] = (bool)$user['is_admin'];
+    $_SESSION['role'] = $user['role'] ?? 'inspector';
     $_SESSION['permissions'] = $permissions;
     $_SESSION['logged_in_at'] = time();
 
@@ -64,7 +65,14 @@ function authenticate(string $username, string $password): array {
 
     logActivity($user['id'], 'login', 'User logged in successfully');
 
-    $redirect = $_SESSION['is_admin'] ? 'pages/dashboard.php' : 'pages/user/dashboard.php';
+    $role = $_SESSION['role'] ?? 'inspector';
+    if ($role === 'developer') {
+        $redirect = 'pages/dashboard.php';
+    } elseif ($role === 'admin' || !empty($_SESSION['is_admin'])) {
+        $redirect = 'pages/dashboard.php';
+    } else {
+        $redirect = 'pages/user/dashboard.php';
+    }
     return ['success' => true, 'redirect' => $redirect];
 }
 
@@ -128,7 +136,8 @@ function refreshUserPermissions(): array {
 
 function getUserModulePermissions(): array {
     $permissions = refreshUserPermissions();
-    if (!empty($_SESSION['is_admin'])) {
+    $role = $_SESSION['role'] ?? 'inspector';
+    if (!empty($_SESSION['is_admin']) && in_array($role, ['developer', 'admin'])) {
         $permissions = array_fill_keys(array_keys(MODULES), true);
     }
     return $permissions;
@@ -156,9 +165,35 @@ function requireAuth(): void {
 
 function requireAdmin(): void {
     requireAuth();
-    if (empty($_SESSION['is_admin'])) {
+    $role = $_SESSION['role'] ?? 'inspector';
+    if (empty($_SESSION['is_admin']) && !in_array($role, ['developer', 'admin', 'admin_aid'])) {
         redirect(BASE_PATH . '/pages/user/dashboard.php');
     }
+}
+
+function requireDeveloper(): void {
+    requireAuth();
+    $role = $_SESSION['role'] ?? 'inspector';
+    if ($role !== 'developer') {
+        redirect(BASE_PATH . '/pages/dashboard.php');
+    }
+}
+
+function isAdmin(): bool {
+    $role = $_SESSION['role'] ?? 'inspector';
+    return !empty($_SESSION['is_admin']) || in_array($role, ['admin', 'admin_aid', 'developer']);
+}
+
+function isDeveloper(): bool {
+    return ($_SESSION['role'] ?? 'inspector') === 'developer';
+}
+
+function isAdminAid(): bool {
+    return ($_SESSION['role'] ?? 'inspector') === 'admin_aid';
+}
+
+function getUserRole(): string {
+    return $_SESSION['role'] ?? 'inspector';
 }
 
 function logout(): void {
@@ -169,7 +204,8 @@ function logout(): void {
 }
 
 function hasPermission(string $moduleKey): bool {
-    if (!empty($_SESSION['is_admin'])) return true;
+    $role = $_SESSION['role'] ?? 'inspector';
+    if (!empty($_SESSION['is_admin']) && in_array($role, ['developer', 'admin'])) return true;
     $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
     if (in_array($moduleKey, $alwaysVisible, true)) return true;
     try {

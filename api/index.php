@@ -606,6 +606,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $scheduleId = !empty($data['schedule_id']) ? (int)$data['schedule_id'] : null;
             $results = is_array($data['results'] ?? null) ? $data['results'] : [];
             $newSignature = trim($data['inspector_signature'] ?? '');
+            $teamLeader1 = !empty($data['team_leader_1']) ? (int)$data['team_leader_1'] : null;
+            $teamLeader2 = !empty($data['team_leader_2']) ? (int)$data['team_leader_2'] : null;
 
             if (!$projectTitle || !$inspectionDate) {
                 jsonResponse(['error' => 'Project Title and Inspection Date are required.'], 422);
@@ -629,14 +631,14 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if ($action === 'checklist/create') {
                 $inspectionNo = nextInspectionNo($pdo);
                 if (!$applicationNo) $applicationNo = 'APP-' . $inspectionNo;
-                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, inspector_signature, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $signaturePath, $_SESSION['user_id']]);
+                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, inspector_signature, team_leader_1, team_leader_2, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $signaturePath, $teamLeader1, $teamLeader2, $_SESSION['user_id']]);
                 $id = (int)$pdo->lastInsertId();
                 logActivity($_SESSION['user_id'], 'inspection_checklist_created', "Created inspection $inspectionNo ($projectTitle)");
             } else {
                 if (!$applicationNo) $applicationNo = $existing['application_no'];
-                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, inspector_signature=? WHERE id=?')
-                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $signaturePath, $id]);
+                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, inspector_signature=?, team_leader_1=?, team_leader_2=? WHERE id=?')
+                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $signaturePath, $teamLeader1, $teamLeader2, $id]);
                 logActivity($_SESSION['user_id'], 'inspection_checklist_updated', "Updated inspection ID $id");
             }
 
@@ -659,7 +661,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             requirePermission('inspection-checklist');
             $id = (int)($_GET['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
-            $stmt = $pdo->prepare("SELECT r.*, u.full_name AS inspector_name, rev.full_name AS reviewed_by_name, app.full_name AS approved_by_name, e.full_name AS encoded_by_name FROM inspection_records r LEFT JOIN users u ON u.id = r.inspector_id LEFT JOIN users rev ON rev.id = r.reviewed_by LEFT JOIN users app ON app.id = r.approved_by LEFT JOIN users e ON e.id = r.encoded_by WHERE r.id = ?");
+            $stmt = $pdo->prepare("SELECT r.*, u.full_name AS inspector_name, rev.full_name AS reviewed_by_name, app.full_name AS approved_by_name, e.full_name AS encoded_by_name, tl1.full_name AS team_leader_1_name, tl1.position AS team_leader_1_position, tl2.full_name AS team_leader_2_name, tl2.position AS team_leader_2_position FROM inspection_records r LEFT JOIN users u ON u.id = r.inspector_id LEFT JOIN users rev ON rev.id = r.reviewed_by LEFT JOIN users app ON app.id = r.approved_by LEFT JOIN users e ON e.id = r.encoded_by LEFT JOIN team_leaders tl1 ON tl1.id = r.team_leader_1 LEFT JOIN team_leaders tl2 ON tl2.id = r.team_leader_2 WHERE r.id = ?");
             $stmt->execute([$id]);
             $record = $stmt->fetch();
             if (!$record) jsonResponse(['error' => 'Inspection record not found.'], 404);
@@ -675,6 +677,78 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $photoStmt->execute([$id]);
             $record['photos'] = $photoStmt->fetchAll();
             jsonResponse(['success' => true, 'data' => $record]);
+
+        case 'inspection/ai-status':
+            requirePermission('inspection-checklist');
+            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
+            $aiStmt->execute(['ai_api_key']);
+            $aiConfigured = trim((string)$aiStmt->fetchColumn()) !== '';
+            jsonResponse(['success' => true, 'ai_enabled' => $aiConfigured]);
+
+        case 'inspection/remark-ai':
+            requirePermission('inspection-checklist');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $category = trim($data['category'] ?? '');
+            $items = is_array($data['items'] ?? null) ? $data['items'] : [];
+            if (!$category) jsonResponse(['error' => 'Category required.'], 422);
+            if (!$items) jsonResponse(['error' => 'No checklist items to summarize.'], 422);
+
+            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
+            $aiStmt->execute(['ai_api_key']);
+            $apiKey = trim((string)$aiStmt->fetchColumn());
+            if ($apiKey === '') {
+                jsonResponse(['success' => true, 'ai_enabled' => false, 'message' => 'AI not configured.']);
+            }
+
+            $passed = 0; $failed = 0; $na = 0;
+            $lineItems = [];
+            foreach ($items as $it) {
+                $text = trim($it['item_text'] ?? '');
+                $res = $it['result'] ?? 'N/A';
+                if ($res === 'Pass') $passed++;
+                elseif ($res === 'Fail') $failed++;
+                else $na++;
+                if ($text !== '') $lineItems[] = '- ' . $text . ' (' . $res . ')';
+            }
+                $prompt = "You are a building inspector writing the 'Remark/s' section of an on-site ocular inspection checklist. "
+                . "Summary: $passed passed, $failed failed, $na not applicable.\n"
+                . "Write exactly ONE short sentence summarizing compliance for category \"$category\". "
+                . "Mention only notable findings. Example: 'All items passed except lighting fixtures requiring rework.'"
+                . " Do not list each item. Keep it to a single short sentence in English.\n\n"
+                . "Items:\n" . implode("\n", $lineItems);
+
+            $model = 'llama-3.3-70b-versatile';
+            $baseUrl = 'https://api.groq.com/openai/v1';
+
+            try {
+                $url = "$baseUrl/chat/completions";
+                $payload = ['model' => $model, 'messages' => [['role' => 'system', 'content' => 'You are a concise building inspection assistant.'], ['role' => 'user', 'content' => $prompt]], 'max_tokens' => 60];
+                $ch = curl_init($url);
+                curl_setopt_array($ch, [
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => json_encode($payload),
+                    CURLOPT_HTTPHEADER => ['Content-Type: application/json', "Authorization: Bearer $apiKey"],
+                    CURLOPT_TIMEOUT => 30,
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0,
+                ]);
+                $raw = curl_exec($ch);
+                $err = curl_error($ch);
+                curl_close($ch);
+                if ($err) jsonResponse(['error' => "AI request failed: $err"], 502);
+                $decoded = json_decode($raw, true);
+                if (isset($decoded['error'])) {
+                    $apiMsg = is_array($decoded['error']) ? ($decoded['error']['message'] ?? json_encode($decoded['error'])) : (string)$decoded['error'];
+                    jsonResponse(['error' => "AI provider error: $apiMsg"], 502);
+                }
+                $summary = $decoded['choices'][0]['message']['content'] ?? '';
+                $summary = trim(preg_replace('/\s+/', ' ', (string)$summary));
+                if ($summary === '') jsonResponse(['error' => 'AI returned an empty response.'], 502);
+                jsonResponse(['success' => true, 'ai_enabled' => true, 'summary' => $summary]);
+            } catch (Throwable $e) {
+                jsonResponse(['error' => 'AI summary failed: ' . $e->getMessage()], 502);
+            }
 
         case 'inspection/checklist/delete':
             requirePermission('inspection-checklist');
@@ -826,9 +900,11 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if ($status) { $where[] = 'r.status = ?'; $params[] = $status; }
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
             $stmt = $pdo->prepare("
-                SELECT r.*, u.full_name AS inspector_name
+                SELECT r.*, u.full_name AS inspector_name, tl1.full_name AS team_leader_1_name, tl2.full_name AS team_leader_2_name
                 FROM inspection_records r
                 LEFT JOIN users u ON u.id = r.inspector_id
+                LEFT JOIN team_leaders tl1 ON tl1.id = r.team_leader_1
+                LEFT JOIN team_leaders tl2 ON tl2.id = r.team_leader_2
                 $whereSql
                 ORDER BY r.inspection_date DESC, r.created_at DESC
                 LIMIT 100
@@ -1199,22 +1275,47 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            ===================================================================== */
         case 'settings/modules':
             requireAdmin();
+            $moduleLabels = [
+                'order-of-payment' => 'Order of Payment',
+                'op-records' => 'OP Records',
+                'permit-workflow' => 'Permit Workflow',
+                'workflow-details' => 'Workflow Details',
+                'permit-approval-encoding' => 'Permit Approval Encoding',
+                'permit-approval-records' => 'Permit Approval Records',
+                'releasing' => 'Releasing Plans',
+                'releasing-records' => 'Releasing Records',
+                'inspection-checklist' => 'Ocular Inspection Checklist',
+                'inspection-reports' => 'Monitoring Reports',
+            ];
             $stmt = $pdo->prepare("SELECT setting_key AS `key`, setting_value AS `status` FROM system_settings WHERE setting_key LIKE 'module_%'");
             $stmt->execute();
             $rows = $stmt->fetchAll();
             if (!$rows) {
-                $defaultModules = [
-                    ['key' => 'op', 'label' => 'Order of Payment', 'desc' => 'Encoding and records of order of payment transactions.', 'status' => 'active'],
-                    ['key' => 'workflow', 'label' => 'Permit Workflow', 'desc' => 'Routing and processing of permit applications.', 'status' => 'active'],
-                    ['key' => 'approved', 'label' => 'Permit Approved', 'desc' => 'Approved permits and related reporting.', 'status' => 'active'],
-                    ['key' => 'releasing', 'label' => 'Releasing', 'desc' => 'Releasing plans and releasing reports.', 'status' => 'active']
-                ];
-                jsonResponse(['success' => true, 'data' => $defaultModules]);
+                $modules = [];
+                foreach ($moduleLabels as $k => $v) {
+                    $modules[] = ['key' => $k, 'label' => $v, 'status' => 'active'];
+                }
+                jsonResponse(['success' => true, 'data' => $modules]);
             }
-            $modules = array_map(function($r) {
-                return ['key' => str_replace('module_', '', $r['key']), 'status' => $r['status']];
+            $modules = array_map(function($r) use ($moduleLabels) {
+                $key = str_replace('module_', '', $r['key']);
+                return ['key' => $key, 'label' => $moduleLabels[$key] ?? $key, 'status' => $r['status']];
             }, $rows);
             jsonResponse(['success' => true, 'data' => $modules]);
+
+        case 'settings/ai-get':
+            requireAdmin();
+            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
+            $aiStmt->execute(['ai_api_key']);
+            jsonResponse(['success' => true, 'data' => ['ai_api_key' => (string)$aiStmt->fetchColumn()]]);
+
+        case 'settings/ai-save':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $val = trim((string)($data['ai_api_key'] ?? ''));
+            $pdo->prepare('INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?')
+                ->execute(['ai_api_key', $val, $val]);
+            jsonResponse(['success' => true, 'message' => 'AI settings saved.']);
 
         case 'settings/toggle-module':
             requireAdmin();
@@ -1240,7 +1341,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
         case 'users/list':
             requireAdmin();
-            $stmt = $pdo->query('SELECT u.*, GROUP_CONCAT(up.module_key) AS granted_modules FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id AND up.is_granted = 1 GROUP BY u.id ORDER BY u.created_at DESC');
+            $stmt = $pdo->query('SELECT u.id, u.full_name, u.username, u.email, u.is_admin, u.is_active, u.role, u.created_at, u.last_login, GROUP_CONCAT(up.module_key) AS granted_modules FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id AND up.is_granted = 1 GROUP BY u.id ORDER BY u.created_at DESC');
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         case 'users/toggle-permission':
@@ -1258,6 +1359,126 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $pdo->prepare('INSERT INTO user_permissions (user_id, module_key, is_granted) VALUES (?, ?, ?)')->execute([$userId, $moduleKey, $granted]);
             }
             jsonResponse(['success' => true, 'message' => 'Permission updated.']);
+
+        case 'users/create':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $fullName = trim($data['fullName'] ?? $data['full_name'] ?? '');
+            $username = trim($data['username'] ?? '');
+            $password = $data['password'] ?? '';
+            $role = $data['role'] ?? 'inspector';
+            $position = $data['position'] ?? '';
+            $modules = $data['modules'] ?? [];
+            if (!$fullName || !$username || !$password) jsonResponse(['error' => 'Full name, username, and password required.'], 422);
+            if (!in_array($role, ['developer', 'admin', 'admin_aid', 'inspector'])) jsonResponse(['error' => 'Invalid role.'], 422);
+            $stmt = $pdo->prepare('SELECT id FROM users WHERE username = ?');
+            $stmt->execute([$username]);
+            if ($stmt->fetch()) jsonResponse(['error' => 'Username already exists.'], 422);
+            $isadmin = in_array($role, ['developer', 'admin', 'admin_aid']) ? 1 : 0;
+            $pdo->prepare('INSERT INTO users (full_name, username, password_hash, is_admin, role, position) VALUES (?, ?, ?, ?, ?, ?)')
+                ->execute([$fullName, $username, password_hash($password, PASSWORD_DEFAULT), $isadmin, $role, $position]);
+            $newId = (int)$pdo->lastInsertId();
+            if (!empty($modules) && is_array($modules)) {
+                $permStmt = $pdo->prepare('INSERT INTO user_permissions (user_id, module_key, is_granted) VALUES (?, ?, 1)');
+                foreach ($modules as $mod) {
+                    $permStmt->execute([$newId, $mod]);
+                }
+            }
+            logActivity($_SESSION['user_id'], 'user_created', "Created user: $fullName ($username) role=$role");
+            jsonResponse(['success' => true, 'message' => 'User created.']);
+
+        case 'users/update':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $userId = (int)($data['id'] ?? 0);
+            $fullName = trim($data['fullName'] ?? $data['full_name'] ?? '');
+            $role = $data['role'] ?? '';
+            $position = $data['position'] ?? '';
+            $modules = $data['modules'] ?? null;
+            if (!$userId || !$fullName) jsonResponse(['error' => 'User ID and full name required.'], 422);
+            if ($role && !in_array($role, ['developer', 'admin', 'admin_aid', 'inspector'])) jsonResponse(['error' => 'Invalid role.'], 422);
+            $isadmin = in_array($role, ['developer', 'admin', 'admin_aid']) ? 1 : 0;
+            $pdo->prepare('UPDATE users SET full_name = ?, is_admin = ?, role = ?, position = ? WHERE id = ?')
+                ->execute([$fullName, $isadmin, $role, $position, $userId]);
+            if (is_array($modules)) {
+                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$userId]);
+                $permStmt = $pdo->prepare('INSERT INTO user_permissions (user_id, module_key, is_granted) VALUES (?, ?, 1)');
+                foreach ($modules as $mod) {
+                    $permStmt->execute([$userId, $mod]);
+                }
+            }
+            logActivity($_SESSION['user_id'], 'user_updated', "Updated user ID $userId: $fullName");
+            jsonResponse(['success' => true, 'message' => 'User updated.']);
+
+        case 'users/delete':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $userId = (int)($data['id'] ?? 0);
+            if (!$userId) jsonResponse(['error' => 'User ID required.'], 422);
+            if ($userId == $_SESSION['user_id']) jsonResponse(['error' => 'Cannot delete your own account.'], 422);
+            $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$userId]);
+            $pdo->prepare('DELETE FROM activity_logs WHERE user_id = ?')->execute([$userId]);
+            $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
+            logActivity($_SESSION['user_id'], 'user_deleted', "Deleted user ID $userId");
+            jsonResponse(['success' => true, 'message' => 'User deleted.']);
+
+        case 'users/reset-password':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: [];
+            $userId = (int)($data['id'] ?? 0);
+            if (!$userId) jsonResponse(['error' => 'User ID required.'], 422);
+            $tempPw = bin2hex(random_bytes(4));
+            $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+                ->execute([password_hash($tempPw, PASSWORD_DEFAULT), $userId]);
+            jsonResponse(['success' => true, 'message' => "Password reset. Temporary password: $tempPw"]);
+
+        /* =====================================================================
+           TEAM LEADERS  (table: team_leaders)
+           ===================================================================== */
+        case 'teamleaders/list':
+            requireAdmin();
+            $stmt = $pdo->query('SELECT id, full_name, position, team_no, is_active, created_at FROM team_leaders ORDER BY team_no, full_name');
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
+
+        case 'teamleaders/roster':
+            $stmt = $pdo->query('SELECT id, full_name, position, team_no FROM team_leaders WHERE is_active = 1 ORDER BY team_no, full_name');
+            jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
+
+        case 'teamleaders/create':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $fullName = trim($data['full_name'] ?? '');
+            $position = trim($data['position'] ?? '');
+            $teamNo = (int)($data['team_no'] ?? 1);
+            if (!in_array($teamNo, [1, 2], true)) $teamNo = 1;
+            if (!$fullName) jsonResponse(['error' => 'Full name is required.'], 422);
+            $pdo->prepare('INSERT INTO team_leaders (full_name, position, team_no, is_active) VALUES (?, ?, ?, 1)')
+                ->execute([$fullName, $position, $teamNo]);
+            logActivity($_SESSION['user_id'], 'team_leader_created', "Registered team leader: $fullName (Team $teamNo)");
+            jsonResponse(['success' => true, 'id' => (int)$pdo->lastInsertId(), 'message' => 'Team leader registered.']);
+
+        case 'teamleaders/update':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? 0);
+            $fullName = trim($data['full_name'] ?? '');
+            $position = trim($data['position'] ?? '');
+            $teamNo = (int)($data['team_no'] ?? 1);
+            if (!in_array($teamNo, [1, 2], true)) $teamNo = 1;
+            if (!$id || !$fullName) jsonResponse(['error' => 'ID and full name are required.'], 422);
+            $pdo->prepare('UPDATE team_leaders SET full_name = ?, position = ?, team_no = ? WHERE id = ?')
+                ->execute([$fullName, $position, $teamNo, $id]);
+            logActivity($_SESSION['user_id'], 'team_leader_updated', "Updated team leader ID $id");
+            jsonResponse(['success' => true, 'message' => 'Team leader updated.']);
+
+        case 'teamleaders/delete':
+            requireAdmin();
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
+            if (!$id) jsonResponse(['error' => 'ID required.'], 422);
+            $pdo->prepare('DELETE FROM team_leaders WHERE id = ?')->execute([$id]);
+            logActivity($_SESSION['user_id'], 'team_leader_deleted', "Deleted team leader ID $id");
+            jsonResponse(['success' => true, 'message' => 'Team leader deleted.']);
 
         /* =====================================================================
            WORKFLOW — Export to Excel

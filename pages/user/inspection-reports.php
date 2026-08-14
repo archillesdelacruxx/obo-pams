@@ -3,6 +3,9 @@ require_once __DIR__ . '/../../includes/user-shell.php';
 requireAuth();
 requirePermission('inspection-reports');
 $perms = getUserModulePermissions();
+$hasActions = !empty($perms['inspection-edit']) || !empty($perms['inspection-delete']);
+$actionTh = $hasActions ? '<th>Actions</th>' : '';
+$colspan = $hasActions ? '7' : '6';
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,10 +25,10 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
   <style>
     @media print {
-      @page { size: 8.5in 13in; margin: 0.4in; }
+      @page { size: 8.5in 13in; margin: 30px 20px 30px 20px; }
     }
   </style>
 </head>
@@ -55,7 +58,7 @@ $perms = getUserModulePermissions();
             </select>
           </div>
           <div class="scroll-x">
-            <table class="data-table"><thead><tr><th>Inspection No.</th><th>Application No.</th><th>Project Title</th><th>Inspection Date</th><th>Inspector</th><th>Status</th></tr></thead><tbody id="insrTbody"></tbody></table>
+            <table class="data-table"><thead><tr><th>Inspection No.</th><th>Application No.</th><th>Project Title</th><th>Inspection Date</th><th>Inspecting Team</th><th>Status</th><?php echo $actionTh; ?></tr></thead><tbody id="insrTbody" data-colspan="<?php echo $colspan; ?>"></tbody></table>
           </div>
           <div class="table-footer">
             <span class="text-xs text-muted" id="insrPageInfo"></span>
@@ -93,6 +96,6 @@ $perms = getUserModulePermissions();
   <script src="../../assets/js/modal.js"></script>
   <script src="../../assets/js/user-components.js?v=20260803e"></script>
   <script src="../../assets/js/realtime.js?v=20260803b"></script>
-  <script src="../../assets/js/user-app.js?v=20260804f"></script>
+  <script src="../../assets/js/user-app.js?v=20260817c"></script>
 </body>
 </html>

@@ -41,7 +41,7 @@ $moduleLabels = [
   <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
   <style>.module-badge{display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;background:var(--color-primary-50);color:var(--color-primary);border:1px solid var(--color-primary-100)}</style>
 </head>
-<body data-page="user-profile" data-full-name="<?php echo escape($_SESSION['full_name']); ?>" data-username="<?php echo escape($_SESSION['username']); ?>" data-email="<?php echo escape($_SESSION['email'] ?? ''); ?>" data-last-login="<?php echo escape($_SESSION['logged_in_at'] ?? ''); ?>" data-profile-photo="<?php echo escape($profile['profile_photo'] ?? ''); ?>">
+<body data-page="user-profile" data-full-name="<?php echo escape($_SESSION['full_name']); ?>" data-username="<?php echo escape($_SESSION['username']); ?>" data-email="<?php echo escape($_SESSION['email'] ?? ''); ?>" data-last-login="<?php echo escape($_SESSION['logged_in_at'] ?? ''); ?>" data-profile-photo="<?php echo escape($profile['profile_photo'] ?? ''); ?>" data-role="<?php echo escape($_SESSION['role'] ?? 'inspector'); ?>">
   <div class="app-shell" id="appShell">
     <?php echo renderUserSidebar('profile'); ?>
     <div class="main-col">

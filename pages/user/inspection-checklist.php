@@ -23,7 +23,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
 </head>
 <body data-page="inspection-checklist" data-is-admin="<?php echo empty($_SESSION['is_admin']) ? '0' : '1'; ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
   <div class="app-shell" id="appShell">
@@ -46,11 +46,21 @@ $perms = getUserModulePermissions();
               <input type="hidden" id="inschInspectionNo" value="">
               <div class="form-grid">
                 <input type="hidden" id="inschAppNo" value="">
-                <div class="form-group"><label>Monitoring Inspection Team</label><input class="form-control" type="text" id="inschTeam" placeholder="e.g. Team A — Engr. Santos, J. Cruz"></div>
+                <div class="form-group"><label>Team Leader 1</label><div class="tl-select t1"><div class="tl-team-chip">1</div><select id="inschTeamLeader1"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
+                <div class="form-group"><label>Team Leader 2</label><div class="tl-select t2"><div class="tl-team-chip">2</div><select id="inschTeamLeader2"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
                 <div class="form-group"><label>Date Inspected <span class="req">*</span></label><input class="form-control" type="date" id="inschDate"></div>
-                <div class="form-group"><label>Inspection Type</label><input class="form-control" type="text" id="inschInspectionType" placeholder="e.g. Monitoring / Ocular / Site"></div>
+                <div class="form-group">
+                  <label>Inspection Type</label>
+                  <div class="insp-type-pills">
+                    <label class="radio-pill insp-pill"><input type="radio" name="inschInspCount" value="1st Inspection"><span>1st</span></label>
+                    <label class="radio-pill insp-pill"><input type="radio" name="inschInspCount" value="2nd Inspection"><span>2nd</span></label>
+                    <label class="radio-pill insp-pill"><input type="radio" name="inschInspCount" value="3rd Inspection"><span>3rd</span></label>
+                    <label class="radio-pill insp-pill insp-others-pill"><input type="radio" name="inschInspCount" value="others"><span>Others</span></label>
+                  </div>
+                  <input class="form-control insp-others-input" type="text" id="inschInspectionType" placeholder="e.g. Final / Re-inspection / 4th" style="display:none;">
+                </div>
                 <div class="form-group"><label>Building Permit No.</label><input class="form-control form-mono" type="text" id="inschPermitNo" placeholder="e.g. BP-2026-001"></div>
-                <div class="form-group"><label>Date Issued</label><input class="form-control" type="date" id="inschDateIssued"></div>
+                <div class="form-group"><label>Date Re-inspected</label><input class="form-control" type="date" id="inschDateIssued"></div>
                 <div class="form-group"><label>Project Title <span class="req">*</span></label><input class="form-control" type="text" id="inschProjectTitle" placeholder="Project title"></div>
                 <div class="form-group"><label>Physical accomplishment (%)</label><input class="form-control" type="number" id="inschPhysical" min="0" max="100" placeholder="e.g. 75"></div>
                 <div class="form-group"><label>Owner / representative</label><input class="form-control" type="text" id="inschOwner" placeholder="Owner or representative"></div>
@@ -85,20 +95,6 @@ $perms = getUserModulePermissions();
         </div>
 
         <div class="insch-split">
-          <div class="section-card form-card" id="inschSignatureCard">
-            <div class="section-head"><h3>Inspector Signature</h3></div>
-            <div class="section-body">
-              <div class="sig-wrap">
-                <canvas id="inschSignatureCanvas" class="signature-pad" width="700" height="200"></canvas>
-                <div class="sig-actions">
-                  <button type="button" class="btn btn-secondary btn-sm" id="inschSigClear">Clear</button>
-                  <span class="text-xs text-muted" id="inschSigHint">Sign using your mouse, touch, or stylus.</span>
-                </div>
-                <div id="inschSignatureSaved" class="sig-saved" style="display:none;"><span class="badge badge-success">Signed</span></div>
-              </div>
-            </div>
-          </div>
-
           <div class="section-card form-card" id="inschPhotosCard">
             <div class="section-head"><h3>Site Photos</h3></div>
             <div class="section-body">
@@ -126,7 +122,8 @@ $perms = getUserModulePermissions();
               </div>
             </div>
             <div class="flex gap-sm" style="margin-top:14px;">
-              <button type="button" class="btn btn-success" id="inschRejectBtn" style="display:none;">Reject &amp; Sign</button>
+              <button type="button" class="btn btn-success" id="inschApproveBtn" style="display:none;">Approve &amp; Sign</button>
+              <button type="button" class="btn btn-danger" id="inschRejectBtn" style="display:none;">Reject &amp; Sign</button>
             </div>
           </div>
         </div>
@@ -134,8 +131,6 @@ $perms = getUserModulePermissions();
         <div class="flex gap-sm" style="margin-top:8px;">
           <button type="button" class="btn btn-primary" id="inschSaveBtn"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Save Draft</button>
           <button type="button" class="btn btn-primary-outline" id="inschSubmitBtn" style="display:none;">Submit for Review</button>
-          <button type="button" class="btn btn-success" id="inschApproveBtn" style="display:none;">Approve &amp; Sign</button>
-          <button type="button" class="btn btn-secondary" id="inschPrintBtn"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Print</button>
         </div>
       </main>
     </div>
@@ -149,6 +144,6 @@ $perms = getUserModulePermissions();
   <script src="../../assets/js/modal.js"></script>
   <script src="../../assets/js/user-components.js?v=20260803e"></script>
   <script src="../../assets/js/realtime.js?v=20260803b"></script>
-  <script src="../../assets/js/user-app.js?v=20260804f"></script>
+  <script src="../../assets/js/user-app.js?v=20260819a"></script>
 </body>
 </html>

@@ -1935,11 +1935,20 @@ function renderReportDoc(rec) {
   };
 
   const infoField = (label, value) =>
-    `<span class="info-row"><span class="info-label">${escapeHtml(label)}</span><span class="info-colon">:</span><span class="info-value">${escapeHtml(value || '')}</span></span>`;
+    `<div class="mr-field"><div class="mr-field-label">${label}</div><div class="mr-field-value">${escapeHtml(value || '')}</div></div>`;
 
-  const is1st = rec.inspection_type && rec.inspection_type.toLowerCase().includes('1st');
-  const is2nd = rec.inspection_type && rec.inspection_type.toLowerCase().includes('2nd');
-  const is3rd = rec.inspection_type && rec.inspection_type.toLowerCase().includes('3rd');
+  const inspType = (rec.inspection_type || '').trim();
+  const inspLow = inspType.toLowerCase();
+  const is1st = inspLow.includes('1st');
+  const is2nd = inspLow.includes('2nd');
+  const is3rd = inspLow.includes('3rd');
+  const isOthers = !is1st && !is2nd && !is3rd && inspType !== '';
+  const othersText = isOthers ? inspType : '';
+  const inspDisplay = is1st ? '1st Inspection'
+    : is2nd ? '2nd Inspection'
+    : is3rd ? '3rd Inspection'
+    : isOthers ? `Others: ${inspType}`
+    : inspType;
 
   const catHeaders = [
     'General Safety',
@@ -1964,33 +1973,35 @@ function renderReportDoc(rec) {
       <div class="mr-title-box">
         <div class="mr-title">Monitoring On-Site Occular Inspection Checklist</div>
         <div class="mr-inspection-checks">
-          <label class="mr-check"><input type="checkbox" ${is1st ? 'checked' : ''}> 1st Inspection</label>
-          <label class="mr-check"><input type="checkbox" ${is2nd ? 'checked' : ''}> 2nd Inspection</label>
-          <label class="mr-check"><input type="checkbox" ${is3rd ? 'checked' : ''}> Others: <span class="mr-check-line"></span></label>
+          <span class="mr-insp-display">${escapeHtml(inspDisplay)}</span>
         </div>
       </div>
 
       <table class="mr-info-box">
+        <colgroup>
+          <col style="width:26%">
+          <col style="width:48%">
+          <col style="width:26%">
+        </colgroup>
         <tbody>
           <tr>
-            <td>${infoField('Application No.', rec.application_no)}</td>
+            <td>${infoField('Application<br>Number', rec.application_no)}</td>
+            <td>${infoField('Project Title', rec.project_title)}</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td>${infoField('Name of<br>Applicant', rec.owner_representative)}</td>
+            <td>${infoField('Architect /<br>Engineer', rec.project_engineer)}</td>
             <td>${infoField('Time Started', rec.time_started)}</td>
           </tr>
           <tr>
-            <td>${infoField('Project Title', rec.project_title)}</td>
+            <td>${infoField('Date of<br>Inspection', rec.inspection_date ? formatDate(rec.inspection_date) : '')}</td>
+            <td>${infoField('Date of<br>Re-inspection', rec.review_date ? formatDate(rec.review_date) : '')}</td>
             <td>${infoField('Time Finished', rec.time_finished)}</td>
           </tr>
           <tr>
-            <td>${infoField('Name of Applicant', rec.owner_representative)}</td>
-            <td>${infoField('Completion Percentage', rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '')}</td>
-          </tr>
-          <tr>
-            <td>${infoField('Architect / Engineer', rec.project_engineer)}</td>
-            <td>${infoField('Date of Inspection', rec.inspection_date ? formatDate(rec.inspection_date) : '')}</td>
-          </tr>
-          <tr>
-            <td>${infoField('Project Location', rec.project_location)}</td>
-            <td>${infoField('Date of Re-inspection', rec.review_date ? formatDate(rec.review_date) : '')}</td>
+            <td colspan="2">${infoField('Project<br>Location', rec.project_location)}</td>
+            <td>${infoField('Completion %', rec.physical_accomplishment != null ? rec.physical_accomplishment + '%' : '')}</td>
           </tr>
         </tbody>
       </table>
@@ -2013,15 +2024,15 @@ function renderReportDoc(rec) {
           <div class="mr-sig-label">INSPECTED BY:</div>
           <div class="mr-sig-row">
             <div class="mr-sig-person">
-              <div class="mr-sig-name">${rec.inspector_signature ? `<img class="sig-img" src="${imgPath(rec.inspector_signature)}" alt="signature">` : escapeHtml(rec.inspector_name || '')}</div>
-              <div class="mr-sig-line">Name</div>
-              <div class="mr-sig-line">Position</div>
+              <div class="mr-sig-name">${escapeHtml(rec.team_leader_1_name || '')}</div>
+              <div class="mr-sig-line">Team Leader 1</div>
+              <div class="mr-sig-line">${escapeHtml(rec.team_leader_1_position || '&nbsp;')}</div>
             </div>
             <div class="mr-sig-divider"></div>
             <div class="mr-sig-person">
-              <div class="mr-sig-name"></div>
-              <div class="mr-sig-line">Name</div>
-              <div class="mr-sig-line">Position</div>
+              <div class="mr-sig-name">${escapeHtml(rec.team_leader_2_name || '')}</div>
+              <div class="mr-sig-line">Team Leader 2</div>
+              <div class="mr-sig-line">${escapeHtml(rec.team_leader_2_position || '&nbsp;')}</div>
             </div>
           </div>
         </div>
@@ -2060,12 +2071,27 @@ async function initInspectionChecklistPage() {
 
   const canManage = () => getPermSet().has('inspection-edit');
 
-  const sigPad = initSignaturePad($('#inschSignatureCanvas'));
   const reviewPad = initSignaturePad($('#inschReviewCanvas'));
   const $form = $('#inschForm');
   const resultsBody = $('#inschResultsBody');
 
-  const canEdit = () => ['Draft', 'Rejected'].indexOf(status) !== -1;
+  const canEdit = () => getPermSet().has('inspection-edit');
+
+  async function loadTeamLeaderOptions() {
+    const res = await apiGet('teamleaders', 'roster').catch(() => null);
+    const leaders = (res && res.success) ? (res.data || []) : [];
+    const fill = (sel, teamNo) => {
+      const el = $(sel);
+      if (!el) return;
+      const members = leaders.filter(l => parseInt(l.team_no, 10) === teamNo);
+      const opts = members.length
+        ? members.map(l => `<option value="${l.id}">${escapeHtml(l.full_name)}${l.position ? ' — ' + escapeHtml(l.position) : ''}</option>`).join('')
+        : '';
+      el.innerHTML = '<option value="">Select team leader</option>' + opts;
+    };
+    fill('#inschTeamLeader1', 1);
+    fill('#inschTeamLeader2', 2);
+  }
 
   function setStatusUI() {
     const pill = $('#inschStatusPill');
@@ -2073,18 +2099,16 @@ async function initInspectionChecklistPage() {
 
     const editable = canEdit();
     $form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = !editable);
+    $form.querySelectorAll('button').forEach(el => el.disabled = !editable);
+    $form.querySelectorAll('.insp-type-pills .insp-pill').forEach(el => el.style.pointerEvents = editable ? '' : 'none');
     resultsBody.querySelectorAll('input, textarea').forEach(el => el.disabled = !editable);
-    $('#inschSigClear') && ($('#inschSigClear').style.display = editable ? '' : 'none');
-    const sigCanvas = $('#inschSignatureCanvas');
-    if (sigCanvas) sigCanvas.style.pointerEvents = editable ? '' : 'none';
     const photoDrop = $('#inschPhotoDrop');
     if (photoDrop) photoDrop.style.pointerEvents = editable ? '' : 'none';
     const photoInput = $('#inschPhotoInput');
     if (photoInput) photoInput.disabled = !editable;
 
     $('#inschSaveBtn').style.display = editable ? '' : 'none';
-    $('#inschSubmitBtn').style.display = (editable && recordId) ? '' : 'none';
-    $('#inschPrintBtn').style.display = '';
+    $('#inschSubmitBtn').style.display = (editable && recordId && status === 'Draft') ? '' : 'none';
 
     const reviewCard = $('#inschReviewCard');
     const approveBtn = $('#inschApproveBtn');
@@ -2107,18 +2131,6 @@ async function initInspectionChecklistPage() {
       reviewCard.style.display = 'none';
       approveBtn.style.display = 'none';
       rejectBtn.style.display = 'none';
-    }
-  }
-
-  function setSignatureStates() {
-    const saved = $('#inschSignatureSaved');
-    if (record && record.inspector_signature) {
-      saved.style.display = '';
-      saved.innerHTML = `<img class="sig-img" src="${imgPath(record.inspector_signature)}" alt="signature">`;
-      $('#inschSigHint').style.display = 'none';
-    } else {
-      saved.style.display = 'none';
-      $('#inschSigHint').style.display = '';
     }
   }
 
@@ -2180,7 +2192,9 @@ async function initInspectionChecklistPage() {
       return `<div class="checklist-cat">
         <div class="checklist-cat-head"><h4>${escapeHtml(cat)}</h4><span class="cat-pct">${pctInput}</span></div>
         <table class="checklist-table"><thead><tr><th>Inspection Item</th><th class="col-result">Compliance</th><th class="col-remarks"></th></tr></thead><tbody>${rows}</tbody></table>
-        <div class="cat-remark-wrap"><label>Remark/s</label>
+        <div class="cat-remark-wrap">
+          <label>AI Summary</label>
+          <button type="button" class="icon-btn cat-ai-btn" data-ai-cat="${escapeHtml(cat)}" title="Generate remark with AI" style="display:none;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="3.5"/></svg> AI</button>
           <textarea class="form-control cat-remark" data-cat-remarks="${escapeHtml(cat)}" rows="2" placeholder="Remark/s">${escapeHtml(remarks[cat] || '')}</textarea>
         </div>
       </div>`;
@@ -2248,9 +2262,11 @@ async function initInspectionChecklistPage() {
     set('#inschContact', rec.contact_number);
     set('#inschContractor', rec.project_contractor);
     set('#inschEngineer', rec.project_engineer);
-    set('#inschTeam', rec.inspection_team);
+    set('#inschTeamLeader1', rec.team_leader_1 || '');
+    set('#inschTeamLeader2', rec.team_leader_2 || '');
     set('#inschDate', rec.inspection_date);
-    set('#inschInspectionType', rec.inspection_type);
+    const inspType = (rec.inspection_type || '').trim();
+    setInspCountUI(inspType);
     set('#inschTimeStart', rec.time_started);
     set('#inschTimeEnd', rec.time_finished);
     const resRadio = $('input[name="inschResult"]');
@@ -2260,6 +2276,86 @@ async function initInspectionChecklistPage() {
     set('#inschPhysical', rec.physical_accomplishment != null ? rec.physical_accomplishment : '');
     set('#inschFindings', rec.overall_findings);
     set('#inschRecommendations', rec.recommendations);
+  }
+
+  function setInspCountUI(value) {
+    const v = (value || '').trim();
+    const low = v.toLowerCase();
+    const pill = $('input[name="inschInspCount"][value="' + (low.includes('1st') ? '1st Inspection' : low.includes('2nd') ? '2nd Inspection' : low.includes('3rd') ? '3rd Inspection' : 'others') + '"]');
+    if (pill) {
+      pill.checked = true;
+      if (pill.value === 'others') {
+        $('#inschInspectionType').value = v;
+        $('#inschInspectionType').style.display = 'block';
+      } else {
+        $('#inschInspectionType').style.display = 'none';
+      }
+    }
+  }
+
+  function collectInspType() {
+    const sel = $('input[name="inschInspCount"]:checked');
+    if (!sel) return $('#inschInspectionType').value.trim() || null;
+    if (sel.value === 'others') {
+      const t = $('#inschInspectionType').value.trim();
+      return t || null;
+    }
+    return sel.value;
+  }
+
+  function initInspCountUI() {
+    document.querySelectorAll('input[name="inschInspCount"]').forEach(rb => {
+      rb.addEventListener('change', () => {
+        if (rb.value === 'others') {
+          $('#inschInspectionType').style.display = 'block';
+          $('#inschInspectionType').focus();
+        } else {
+          $('#inschInspectionType').style.display = 'none';
+        }
+      });
+    });
+  }
+
+  async function initAiRemarkButtons() {
+    try {
+      const probe = await apiGet('inspection', 'ai-status').catch(() => ({ success: false }));
+      const aiOn = probe && probe.success === true && probe.ai_enabled === true;
+      resultsBody.querySelectorAll('.cat-ai-btn').forEach(btn => { btn.style.display = aiOn ? '' : 'none'; });
+      if (!aiOn) return;
+      resultsBody.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.cat-ai-btn');
+        if (!btn) return;
+        const cat = btn.dataset.aiCat;
+        await generateAiRemark(cat, btn);
+      });
+    } catch (err) { /* AI not available */ }
+  }
+
+  async function generateAiRemark(cat, btn) {
+    const catEl = resultsBody.querySelector(`.cat-remark[data-cat-remarks="${CSS.escape(cat)}"]`);
+    if (!catEl) return;
+    const items = [];
+    resultsBody.querySelectorAll(`tr[data-cat="${CSS.escape(cat)}"]`).forEach(tr => {
+      const text = tr.dataset.item || '';
+      const cb = tr.querySelector('input[data-cb]');
+      items.push({ item_text: text, result: cb && cb.checked ? 'Pass' : 'N/A' });
+    });
+    if (!items.length) { showToast({ title: 'Nothing to summarize', message: 'Check at least one item in this category.', type: 'warning' }); return; }
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '…';
+    try {
+      const res = await apiPost('inspection', 'remark-ai', { category: cat, items });
+      if (!res.success) { showToast({ title: 'AI error', message: res.error || 'Failed to generate remark.', type: 'danger' }); return; }
+      if (res.ai_enabled === false) { showToast({ title: 'AI not configured', message: 'Set an AI key in Settings to use auto-summary.', type: 'warning' }); return; }
+      catEl.value = res.summary;
+      showToast({ title: 'AI remark ready', message: `${cat} summary generated.`, type: 'success' });
+    } catch (err) {
+      showToast({ title: 'AI error', message: 'Could not reach the AI service.', type: 'danger' });
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
   }
 
   function loadPhotos() {
@@ -2291,9 +2387,9 @@ async function initInspectionChecklistPage() {
       fillForm(record);
       renderResults(record);
       setStatusUI();
-      setSignatureStates();
       loadPhotos();
       updateSummary();
+      initAiRemarkButtons();
     }
   }
 
@@ -2316,9 +2412,10 @@ async function initInspectionChecklistPage() {
       contact_number: $('#inschContact').value.trim() || null,
       project_contractor: $('#inschContractor').value.trim() || null,
       project_engineer: $('#inschEngineer').value.trim() || null,
-      inspection_team: $('#inschTeam').value.trim() || null,
+      team_leader_1: $('#inschTeamLeader1').value || null,
+      team_leader_2: $('#inschTeamLeader2').value || null,
       inspection_date: date,
-      inspection_type: $('#inschInspectionType').value.trim() || null,
+      inspection_type: collectInspType(),
       inspection_result: resRadioChecked ? resRadioChecked.value : null,
       time_started: $('#inschTimeStart').value || null,
       time_finished: $('#inschTimeEnd').value || null,
@@ -2328,7 +2425,6 @@ async function initInspectionChecklistPage() {
       overall_findings: $('#inschFindings').value.trim() || null,
       recommendations: $('#inschRecommendations').value.trim() || null,
       schedule_id: $('#inschScheduleId').value || null,
-      inspector_signature: sigPad && !sigPad.isEmpty() ? sigPad.toDataURL() : null,
       results: collectResults()
     };
     const res = recordId
@@ -2394,9 +2490,7 @@ async function initInspectionChecklistPage() {
     }
   });
 
-  $('#inschSigClear') && $('#inschSigClear').addEventListener('click', () => sigPad && sigPad.clear());
   $('#inschReviewSigClear') && $('#inschReviewSigClear').addEventListener('click', () => reviewPad && reviewPad.clear());
-  $('#inschPrintBtn') && $('#inschPrintBtn').addEventListener('click', () => window.print());
 
   resultsBody.addEventListener('change', updateSummary);
   window.addEventListener('insch-photos-changed', () => { refreshRecord(); });
@@ -2421,6 +2515,9 @@ async function initInspectionChecklistPage() {
     }
     await refreshRecord();
   });
+
+  await loadTeamLeaderOptions();
+  initInspCountUI();
 
   if (editId) {
     await refreshRecord();
@@ -2450,6 +2547,7 @@ async function initInspectionChecklistPage() {
     renderResults(record);
     setStatusUI();
     updateSummary();
+    initAiRemarkButtons();
   }
 }
 
@@ -2469,8 +2567,8 @@ async function removeInspectionPhoto(photoId) {
 function fitReportToPage() {
   const doc = $('#insrReportBody');
   if (!doc || !doc.children.length) return;
-  const PRINT_W = 739;
-  const PRINT_H = 1171;
+  const PRINT_W = 776;
+  const PRINT_H = 1188;
   doc.style.zoom = '1';
   doc.style.width = PRINT_W + 'px';
   const naturalH = doc.scrollHeight;
@@ -2500,19 +2598,21 @@ async function initInspectionReportsPage() {
     const rows = res.data || [];
     const canEdit = getPermSet().has('inspection-edit');
     const canDelete = getPermSet().has('inspection-delete');
+    const showActions = canEdit || canDelete;
+    const colspan = tbody.dataset.colspan || '7';
     tbody.innerHTML = rows.map(r => `
        <tr onclick="viewInspectionReport(${r.id})" style="cursor:pointer">
          <td class="cell-mono">${escapeHtml(r.inspection_no)}</td>
          <td class="cell-mono">${escapeHtml(r.application_no)}</td>
          <td><strong>${escapeHtml(r.project_title)}</strong></td>
          <td>${r.inspection_date ? formatDate(r.inspection_date) : '—'}</td>
-         <td>${escapeHtml(r.inspector_name || '—')}</td>
+         <td>${escapeHtml(r.team_leader_1_name || '—')}${r.team_leader_2_name ? ', ' + escapeHtml(r.team_leader_2_name) : ', <span class="text-muted">No Team 2</span>'}</td>
          <td>${statusBadge(r.status)}</td>
-         <td><div class="row-actions">
+         ${showActions ? `<td><div class="row-actions">
            ${canEdit ? `<button class="icon-btn" title="Open checklist" onclick="event.stopPropagation();location.href='inspection-checklist.php?id=${r.id}'">${userIcon('edit')}</button>` : ''}
-           ${canDelete && (r.status === 'Draft' || r.status === 'Rejected') ? `<button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
-         </div></td>
-       </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--gray-400);">No inspection records found.</td></tr>';
+           ${canDelete ? `<button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
+         </div></td>` : ''}
+       </tr>`).join('') || `<tr><td colspan="${colspan}" style="text-align:center;padding:48px;color:var(--gray-400);">No inspection records found.</td></tr>`;
     const pi = $('#insrPageInfo');
     if (pi) pi.textContent = `${rows.length} record${rows.length === 1 ? '' : 's'}`;
   }
@@ -2564,7 +2664,7 @@ async function initInspectionHistoryPage() {
         <td><div class="row-actions">
           <button class="icon-btn" title="View details" onclick="viewInspectionHistory(${r.id})">${userIcon('eye')}</button>
           <button class="icon-btn" title="Open checklist" onclick="location.href='inspection-checklist.php?id=${r.id}'">${userIcon('edit')}</button>
-          ${r.status === 'Draft' || r.status === 'Rejected' ? `<button class="icon-btn" title="Delete" onclick="deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
+          ${getPermSet().has('inspection-delete') ? `<button class="icon-btn" title="Delete" onclick="deleteInspectionRecord(${r.id})">${userIcon('trash')}</button>` : ''}
         </div></td>
       </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:48px;color:var(--gray-400);">No inspection records found.</td></tr>';
     const pi = $('#inshPageInfo');
@@ -2679,7 +2779,11 @@ function initUserProfilePage() {
   if (statusEl) statusEl.innerHTML = '<span class="badge badge-success">Active</span>';
 
   const roleEl = $('#profileRole');
-  if (roleEl) roleEl.textContent = 'User';
+  if (roleEl) {
+    const role = document.body.dataset.role || 'inspector';
+    const roleMap = { developer: 'Developer', admin: 'Administrator', admin_aid: 'Admin Aid', inspector: 'Inspector' };
+    roleEl.textContent = roleMap[role] || 'Inspector';
+  }
 
   $('#profileEditBtn')?.addEventListener('click', () => { window.location.href = 'settings.php'; });
   $('#profileChangePwBtn')?.addEventListener('click', () => { window.location.href = 'settings.php#password'; });

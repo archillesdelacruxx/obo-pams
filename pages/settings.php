@@ -83,6 +83,26 @@ requireAdmin();
 
           <div>
             <div class="section-card">
+              <div class="section-head"><h3>AI Remark Assistant</h3><span class="badge badge-info">Inspection</span></div>
+              <div class="section-body">
+                <p class="text-sm text-muted" style="margin-bottom:14px;">
+                  Add an AI API key so inspectors can auto-summarize each checklist category's compliance
+                  into the Remark/s box. Leave blank to hide the AI button (manual typing still works).
+                </p>
+                <form id="aiSettingsForm">
+                  <div class="form-group">
+                    <label>API Key</label>
+                    <input class="form-control form-mono" type="password" id="aiApiKey" placeholder="sk-…" autocomplete="off">
+                  </div>
+                  <div class="flex gap-sm" style="align-items:flex-end;">
+                    <button type="submit" class="btn btn-primary">Save AI Settings</button>
+                    <span class="text-xs text-muted" id="aiStatusText"></span>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="section-card">
               <div class="section-head"><h3>Reserved for Future Settings</h3></div>
               <div class="section-body">
                 <div class="empty-state" style="padding:36px 16px;">
@@ -111,7 +131,7 @@ requireAdmin();
   <script src="../assets/js/table.js"></script>
   <script src="../assets/js/validation.js"></script>
   <script src="../assets/js/realtime.js?v=20260803b"></script>
-  <script src="../assets/js/app.js?v=20260803d"></script>
+  <script src="../assets/js/app.js?v=20260816b"></script>
 </body>
 </html>
 
