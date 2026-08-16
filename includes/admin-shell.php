@@ -5,7 +5,7 @@ function renderAdminSidebar(string $activeKey): string {
     $basePath = '../';
     $role = $_SESSION['role'] ?? 'inspector';
 
-    if ($role === 'admin_aid') {
+    if (in_array($role, ['admin_aid', 'inspector-admin'], true)) {
         $items = [
             ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
         ];
@@ -23,17 +23,25 @@ function renderAdminSidebar(string $activeKey): string {
             $items[] = ['key' => $key, 'label' => $it['label'], 'page' => 'user/' . $it['page'], 'icon' => $it['icon']];
         }
 
-        $items[] = ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'];
-        $items[] = ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'];
+        if ($role === 'inspector-admin') {
+            $items[] = ['key' => 'activity-logs', 'label' => 'Activity Logs', 'page' => 'activity-logs.php', 'icon' => 'activity'];
+        }
+
+        $items[] = ['key' => 'users', 'label' => 'User Management', 'page' => 'user-management.php', 'icon' => 'users'];
+        $items[] = ['key' => 'settings', 'label' => ($role === 'developer' ? 'Settings' : 'Profile Settings'), 'page' => 'settings.php', 'icon' => 'settings'];
     } else {
         $items = [
             ['key' => 'dashboard', 'label' => 'Dashboard', 'page' => 'dashboard.php', 'icon' => 'grid'],
+            ['key' => 'activity-logs', 'label' => 'Activity Logs', 'page' => 'activity-logs.php', 'icon' => 'activity'],
             ['key' => 'reports', 'label' => 'Reports', 'page' => 'reports.php', 'icon' => 'bar-chart'],
             ['key' => 'users', 'label' => 'User Management', 'page' => 'user-management.php', 'icon' => 'users'],
             ['key' => 'notifications', 'label' => 'Announcements', 'page' => 'notifications.php', 'icon' => 'megaphone'],
-            ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings'],
-            ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'],
+            ['key' => 'settings', 'label' => ($role === 'developer' ? 'Settings' : 'Profile Settings'), 'page' => 'settings.php', 'icon' => 'settings'],
         ];
+    }
+
+    if ($role === 'developer') {
+        $items[] = ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user'];
     }
 
     $navHtml = '';
@@ -72,7 +80,7 @@ function renderAdminSidebar(string $activeKey): string {
                 <div class="avatar sm">' . $avatarHtml . '</div>
                 <div class="info">
                     <strong>' . $name . '</strong>
-                    <span>' . ($role === 'admin_aid' ? 'Admin Aid' : 'System Administrator') . '</span>
+                    <span>' . escape(roleDisplayName($role)) . '</span>
                 </div>
             </div>
         </div>
@@ -107,13 +115,13 @@ function renderAdminHeader(string $pageTitle): string {
                     <div class="avatar sm">' . $avatarHtml . '</div>
                     <div class="info">
                         <strong>' . $first . ' ' . $last . '</strong>
-                        <span>' . ($_SESSION['role'] === 'admin_aid' ? 'Admin Aid' : 'Administrator') . '</span>
+                        <span>' . escape(roleDisplayName($_SESSION['role'] ?? 'inspector')) . '</span>
                     </div>
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </div>
                 <div class="dropdown-panel profile-menu" id="profilePanel">
-                    <div class="profile-menu-item" data-nav="profile.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Profile</div>
-                    <div class="profile-menu-item" data-nav="settings.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</div>
+                    ' . ($_SESSION['role'] === 'developer' ? '<div class="profile-menu-item" data-nav="profile.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Profile</div>' : '') . '
+                    <div class="profile-menu-item" data-nav="settings.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> ' . ($_SESSION['role'] === 'developer' ? 'Settings' : 'Profile Settings') . '</div>
                     <hr class="divider" style="margin:6px 0;">
                     <div class="profile-menu-item danger" id="logoutTrigger"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg> Logout</div>
                 </div>

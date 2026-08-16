@@ -159,6 +159,9 @@ function isAuthenticated(): bool {
 
 function requireAuth(): void {
     if (!isAuthenticated()) {
+        if (defined('API_MODE')) {
+            jsonResponse(['error' => 'Unauthorized. Please sign in.'], 401);
+        }
         redirect(BASE_PATH . '/index.php');
     }
 }
@@ -169,6 +172,28 @@ function requireAdmin(): void {
     if (empty($_SESSION['is_admin']) && !in_array($role, ['developer', 'admin', 'admin_aid'])) {
         redirect(BASE_PATH . '/pages/user/dashboard.php');
     }
+}
+
+/* Stricter gate: only developer / admin (excludes admin_aid). Used for
+   system-level management (module availability, AI key, announcements,
+   staff reports) that an Admin Aid encoder should not control. */
+function requireSystemAdmin(): void {
+    requireAuth();
+    $role = $_SESSION['role'] ?? 'inspector';
+    if (!in_array($role, ['developer', 'admin'], true)) {
+        if (defined('API_MODE')) {
+            jsonResponse(['error' => 'Forbidden.'], 403);
+        }
+        http_response_code(403);
+        require_once __DIR__ . '/../error.php';
+        exit;
+    }
+}
+
+/* Team leader management: developer / admin / inspector-admin, or a user
+   explicitly granted the team-leaders module. */
+function canManageTeamLeaders(): bool {
+    return in_array(getUserRole(), ['developer', 'admin', 'inspector-admin'], true) || hasPermission('team-leaders');
 }
 
 function requireDeveloper(): void {
@@ -194,6 +219,76 @@ function isAdminAid(): bool {
 
 function getUserRole(): string {
     return $_SESSION['role'] ?? 'inspector';
+}
+
+/* Human-readable role labels.
+   developer = System Administrator (top-level), admin = Administrator (manages Admin Aids). */
+function roleDisplayName(string $role): string {
+    return match ($role) {
+        'developer' => 'System Administrator',
+        'admin' => 'Administrator',
+        'admin_aid' => 'Admin Aid',
+        'inspector-admin' => 'Inspector Admin',
+        'inspector' => 'Inspector',
+        default => ucfirst($role),
+    };
+}
+
+/* Activity Logs access: developer / admin / inspector-admin only.
+   admin_aid and inspector have no subordinates, so no activity log. */
+function canViewActivityLogs(): bool {
+    return in_array(getUserRole(), ['developer', 'admin', 'inspector-admin'], true);
+}
+
+/* Role scope for Activity Logs: each level only sees its own subordinates.
+   developer → all, admin → Admin Aids only, inspector-admin → Inspectors only. */
+function getActivityLogScope(): ?string {
+    return match (getUserRole()) {
+        'admin' => 'admin_aid',
+        'inspector-admin' => 'inspector',
+        default => null,
+    };
+}
+
+/* Role-based registration hierarchy:
+   developer → all roles, admin → Admin Aid only, inspector-admin → Inspector only.
+   admin_aid and inspector cannot register anyone. */
+function getAllowedRegistrableRoles(): array {
+    $map = [
+        'developer' => ['admin', 'admin_aid', 'inspector-admin', 'inspector'],
+        'admin' => ['admin_aid'],
+        'inspector-admin' => ['inspector'],
+    ];
+    return $map[getUserRole()] ?? [];
+}
+
+function canRegisterRole(string $targetRole): bool {
+    return in_array($targetRole, getAllowedRegistrableRoles(), true);
+}
+
+/* Module groups by role:
+   Admin Aid II → Order of Payment encoding up to Releasing Records.
+   Inspector → On-site Ocular Checklist up to Team Leaders.
+   admin / developer / inspector-admin are unrestricted (all modules assignable). */
+const MODULES_ENCODING = [
+    'order-of-payment', 'op-records', 'permit-workflow', 'workflow-details',
+    'permit-approval-encoding', 'permit-approval-records', 'releasing', 'releasing-records',
+];
+
+const MODULES_INSPECTION = [
+    'inspection-checklist', 'inspection-reports', 'inspection-review',
+    'inspection-edit', 'inspection-delete', 'team-leaders',
+];
+
+function getRoleModuleKeys(string $role): ?array {
+    if ($role === 'admin_aid') return MODULES_ENCODING;
+    if ($role === 'inspector') return MODULES_INSPECTION;
+    return null;
+}
+
+/* Who may open the user-management page and manage user accounts. */
+function canManageUsers(): bool {
+    return in_array(getUserRole(), ['developer', 'admin', 'admin_aid', 'inspector-admin'], true);
 }
 
 function logout(): void {
@@ -222,6 +317,9 @@ function hasPermission(string $moduleKey): bool {
 function requirePermission(string $moduleKey): void {
     requireAuth();
     if (!hasPermission($moduleKey)) {
+        if (defined('API_MODE')) {
+            jsonResponse(['error' => 'Forbidden.'], 403);
+        }
         http_response_code(403);
         require_once __DIR__ . '/../error.php';
         exit;

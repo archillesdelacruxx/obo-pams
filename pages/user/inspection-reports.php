@@ -9,6 +9,7 @@ $colspan = $hasActions ? '7' : '6';
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inspection Monitoring Reports · PAMS User</title>
@@ -17,7 +18,7 @@ $colspan = $hasActions ? '7' : '6';
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260816c">
   <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
@@ -42,20 +43,12 @@ $colspan = $hasActions ? '7' : '6';
         <div class="page-head"><div><h1>Inspection Monitoring Reports</h1><p class="subtitle">Auto-generated monitoring reports from completed on-site ocular inspections.</p></div></div>
 
         <div class="section-card table-card">
-          <div class="section-head"><h3>Inspection Records</h3><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="insrRefreshBtn">Refresh</button></div>
+          <div class="section-head"><h3>Inspection Records <span class="text-xs text-muted" style="font-weight:400;">· Completed & Approved only</span></h3><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px;" id="insrRefreshBtn">Refresh</button></div>
           <div class="table-toolbar" style="padding:0 20px 14px;border:none;">
             <div class="search-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="insrSearch" placeholder="Search inspections…">
             </div>
-            <select id="insrStatusFilter" class="form-control" style="width:auto;min-width:150px;">
-              <option value="">All statuses</option>
-              <option>Completed</option>
-              <option>Approved</option>
-              <option>Under Review</option>
-              <option>Draft</option>
-              <option>Rejected</option>
-            </select>
           </div>
           <div class="scroll-x">
             <table class="data-table"><thead><tr><th>Inspection No.</th><th>Application No.</th><th>Project Title</th><th>Inspection Date</th><th>Inspecting Team</th><th>Status</th><?php echo $actionTh; ?></tr></thead><tbody id="insrTbody" data-colspan="<?php echo $colspan; ?>"></tbody></table>

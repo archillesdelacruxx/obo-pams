@@ -20,8 +20,7 @@ const USER_NAV_ITEMS = [
   { key: 'inspection-checklist',     label: 'Ocular Inspection Checklist', page: 'inspection-checklist.php',      icon: 'clipboard',    section: 'Inspection Management' },
   { key: 'inspection-reports',       label: 'Monitoring Reports',       page: 'inspection-reports.php',            icon: 'activity',     section: 'Inspection Management' },
   { key: 'announcements',            label: 'Announcements',            page: 'announcements.php',                 icon: 'megaphone',    section: 'Account' },
-  { key: 'settings',                 label: 'Settings',                 page: 'settings.php',                      icon: 'settings',     section: 'Account' },
-  { key: 'profile',                  label: 'Profile',                  page: 'profile.php',                       icon: 'user',         section: 'Account' }
+  { key: 'settings',                 label: 'Profile Settings',        page: 'settings.php',                      icon: 'settings',     section: 'Account' }
 ];
 
 /* --------------------------------------------------------------------------
@@ -60,7 +59,10 @@ const USER_NAV_ICONS = {
   'clipboard':   '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 0-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
   'activity':    '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
   'calendar':    '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-  'trash':       '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>'
+  'trash':       '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6"/>',
+  'users':       '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  'check':       '<polyline points="20 6 9 17 4 12"/>',
+  'check-done':  '<path d="M3 15l5 5L21 6"/><path d="M9 15l3 3 8-9"/>'
 };
 
 function userIcon(name, cls = '') {
@@ -121,8 +123,7 @@ function renderUserHeader(pageTitle) {
           ${userIcon('chevron')}
         </div>
         <div class="dropdown-panel profile-menu" id="profilePanel">
-          <div class="profile-menu-item" data-user-nav="profile.php">${userIcon('user')} My Profile</div>
-          <div class="profile-menu-item" data-user-nav="settings.php">${userIcon('settings')} Settings</div>
+<div class="profile-menu-item" data-user-nav="../settings.php">${userIcon('settings')} Profile Settings</div>
           <hr class="divider" style="margin:6px 0;">
           <div class="profile-menu-item danger" id="userLogoutTrigger">${userIcon('logout')} Logout</div>
         </div>
@@ -233,7 +234,7 @@ function initUserHeaderDropdowns() {
         const recordId = el.dataset.notifRecord;
         const moduleName = el.dataset.notifModule;
         if (id && el.classList.contains('unread')) {
-          await apiGet('notifications', 'mark-read', { id }).catch(() => {});
+          await apiPost('notifications', 'mark-read', { id }).catch(() => {});
         }
         if (moduleName === 'announcements' && recordId) {
           localStorage.setItem('pams_open_announcement', recordId);

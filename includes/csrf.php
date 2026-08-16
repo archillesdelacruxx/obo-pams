@@ -23,3 +23,8 @@ function requireCSRF(): void {
         jsonResponse(['error' => 'Invalid security token. Please refresh the page and try again.'], 403);
     }
 }
+
+/* <meta> tag carrying the session CSRF token for JS clients (api.js). */
+function csrfMeta(): string {
+    return '<meta name="csrf-token" content="' . escape(generateCSRFToken()) . '">';
+}

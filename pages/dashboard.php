@@ -19,7 +19,9 @@ function monthlyTrend(PDO $pdo, string $table, string $dateCol): array {
     return array_values($months);
 }
 
-$totalUsers = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+$viewRole = $_SESSION['role'] ?? 'admin';
+$userScopeWhere = $viewRole === 'admin' ? " WHERE role = 'admin_aid'" : '';
+$totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users" . $userScopeWhere)->fetchColumn();
 $opToday = (int)$pdo->query("SELECT COUNT(*) FROM order_of_payments WHERE payment_date = '$today'")->fetchColumn();
 $activeWorkflows = (int)$pdo->query("SELECT COUNT(*) FROM permit_workflows WHERE status NOT IN ('Approved','Disapproved','Released')")->fetchColumn();
 $approvalsMonth = (int)$pdo->query("SELECT COUNT(*) FROM permit_approvals WHERE approval_date >= '$monthStart'")->fetchColumn();
@@ -40,10 +42,14 @@ $wfColors = ['Pending' => '#F0A93B', 'Under Review' => '#5B8DEF', 'Approved' => 
 $wfItems = [];
 foreach ($workflowStatus as $k => $v) $wfItems[] = ['label' => $k, 'value' => $v, 'color' => $wfColors[$k]];
 
-$userCounts = ['admin' => 0, 'obo' => 0];
-foreach ($pdo->query('SELECT is_admin, COUNT(*) c FROM users GROUP BY is_admin') as $r) {
-    if ((int)$r['is_admin'] === 1) $userCounts['admin'] = (int)$r['c'];
-    else $userCounts['obo'] = (int)$r['c'];
+if ($viewRole === 'admin') {
+    $userCounts = ['admin' => 0, 'obo' => $totalUsers];
+} else {
+    $userCounts = ['admin' => 0, 'obo' => 0];
+    foreach ($pdo->query('SELECT is_admin, COUNT(*) c FROM users GROUP BY is_admin') as $r) {
+        if ((int)$r['is_admin'] === 1) $userCounts['admin'] = (int)$r['c'];
+        else $userCounts['obo'] = (int)$r['c'];
+    }
 }
 
 $notifRows = $pdo->query('SELECT is_read, COUNT(*) c FROM notifications GROUP BY is_read')->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -61,7 +67,7 @@ $analytics = [
         ['key' => 'workflow', 'type' => 'list', 'title' => 'Workflow records by status', 'subtitle' => 'Current records', 'items' => $wfItems, 'total' => array_sum($workflowStatus)],
         ['key' => 'approvals', 'type' => 'bars', 'title' => 'Permits approved', 'subtitle' => 'Last 6 months', 'months' => array_column($approvalTrend, 'label'), 'values' => array_column($approvalTrend, 'value'), 'total' => array_sum(array_column($approvalTrend, 'value'))],
         ['key' => 'releasing', 'type' => 'bars', 'title' => 'Releasing records', 'subtitle' => 'Last 6 months', 'months' => array_column($releaseTrend, 'label'), 'values' => array_column($releaseTrend, 'value'), 'total' => array_sum(array_column($releaseTrend, 'value'))],
-        ['key' => 'users', 'type' => 'list', 'title' => 'Registered users', 'subtitle' => 'By role', 'items' => [['label' => 'Admin', 'value' => $userCounts['admin'], 'color' => '#1D5FD6'], ['label' => 'OBO User', 'value' => $userCounts['obo'], 'color' => '#22A55A']], 'total' => $userCounts['admin'] + $userCounts['obo']],
+        ['key' => 'users', 'type' => 'list', 'title' => 'Registered users', 'subtitle' => $viewRole === 'admin' ? 'Admin Aids' : 'By role', 'items' => $viewRole === 'admin' ? [['label' => 'Admin Aid', 'value' => $totalUsers, 'color' => '#22A55A']] : [['label' => 'Administrator', 'value' => $userCounts['admin'], 'color' => '#1D5FD6'], ['label' => 'OBO User', 'value' => $userCounts['obo'], 'color' => '#22A55A']], 'total' => $viewRole === 'admin' ? $totalUsers : ($userCounts['admin'] + $userCounts['obo'])],
         ['key' => 'notifications', 'type' => 'list', 'title' => 'Notifications', 'subtitle' => 'Read status', 'items' => [['label' => 'Unread', 'value' => $unreadNotifs, 'color' => '#E5484D'], ['label' => 'Read', 'value' => $readNotifs, 'color' => '#8A94A6']], 'total' => $unreadNotifs + $readNotifs],
     ],
     'monthly' => [
@@ -79,6 +85,7 @@ $analytics = [
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Â· PAMS</title>
@@ -87,7 +94,7 @@ $analytics = [
 <link rel="stylesheet" href="../assets/css/variables.css">
 <link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
+<link rel="stylesheet" href="../assets/css/layout.css?v=20260816c">
 <link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
 <link rel="stylesheet" href="../assets/css/header.css">
 <link rel="stylesheet" href="../assets/css/cards.css">
@@ -118,7 +125,7 @@ $analytics = [
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
               <?php echo date('M j, Y'); ?>
             </button>
-            <button class="btn btn-primary">
+            <button class="btn btn-primary" id="generateReportBtn">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
               Generate Report
             </button>

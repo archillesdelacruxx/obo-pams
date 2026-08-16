@@ -56,16 +56,6 @@ window.PAMS_REALTIME = (function () {
       .catch(() => {});
   }
 
-  function addLiveIndicator() {
-    const crumb = document.querySelector('.breadcrumb');
-    if (!crumb || crumb.querySelector('.realtime-chip')) return;
-    const chip = document.createElement('span');
-    chip.className = 'realtime-chip';
-    chip.title = 'Data on this page auto-refreshes in real time';
-    chip.innerHTML = '<span class="rt-dot"></span> Live';
-    crumb.appendChild(chip);
-  }
-
   function recomputeSidebarSections() {
     const sidebar = document.getElementById('userSidebar');
     if (!sidebar) return;
@@ -104,7 +94,6 @@ window.PAMS_REALTIME = (function () {
   function start() {
     if (started) return;
     started = true;
-    addLiveIndicator();
     if (document.getElementById('userSidebar')) {
       register('sidebar-perms', syncSidebarPermissions, 20000);
     }

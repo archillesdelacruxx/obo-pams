@@ -28,7 +28,7 @@ async function renderNotificationPanel(){
       <a href="#" id="markAllRead" style="font-size:11.5px;font-weight:700;color:var(--color-primary);text-decoration:none;">Mark all read</a>
     </div>
     <div class="notif-list">${items || '<div style="padding:16px;text-align:center;color:var(--gray-400);">No notifications</div>'}</div>
-    <div class="notif-footer"><a href="reports.php" data-nav="reports.php">View all notifications</a></div>`;
+    <div class="notif-footer"><a href="notifications.php" data-nav="notifications.php">View all notifications</a></div>`;
 }
 
 document.addEventListener('click', (e) => {

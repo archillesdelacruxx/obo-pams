@@ -1,13 +1,25 @@
 <?php
 require_once __DIR__ . '/../includes/admin-shell.php';
-requireAdmin();
+startSession();
+if (!canViewActivityLogs()) {
+    redirect(BASE_PATH . '/pages/user/dashboard.php');
+}
 $pdo = getDB();
-$users = $pdo->query('SELECT id, full_name FROM users WHERE is_active = 1 ORDER BY full_name')->fetchAll();
-$modules = $pdo->query('SELECT DISTINCT module_name FROM activity_logs WHERE module_name IS NOT NULL AND module_name != "" ORDER BY module_name')->fetchAll(PDO::FETCH_COLUMN);
+$scopeRole = getActivityLogScope();
+$userSql = 'SELECT id, full_name FROM users WHERE is_active = 1' . ($scopeRole ? ' AND role = ?' : '') . ' ORDER BY full_name';
+$usersStmt = $pdo->prepare($userSql);
+$usersStmt->execute($scopeRole ? [$scopeRole] : []);
+$users = $usersStmt->fetchAll();
+$moduleSql = 'SELECT DISTINCT a.module_name FROM activity_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.module_name IS NOT NULL AND a.module_name != ""' . ($scopeRole ? ' AND u.role = ?' : '') . ' ORDER BY a.module_name';
+$modStmt = $pdo->prepare($moduleSql);
+$modStmt->execute($scopeRole ? [$scopeRole] : []);
+$modules = $modStmt->fetchAll(PDO::FETCH_COLUMN);
+$scopeLabel = $scopeRole ? (roleDisplayName($scopeRole) . 's') : 'all users across the system';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Activity Logs &middot; PAMS</title>
@@ -16,7 +28,7 @@ $modules = $pdo->query('SELECT DISTINCT module_name FROM activity_logs WHERE mod
 <link rel="stylesheet" href="../assets/css/variables.css">
 <link rel="stylesheet" href="../assets/css/utilities.css">
 <link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
+<link rel="stylesheet" href="../assets/css/layout.css?v=20260816c">
 <link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
 <link rel="stylesheet" href="../assets/css/header.css">
 <link rel="stylesheet" href="../assets/css/cards.css">
@@ -28,7 +40,7 @@ $modules = $pdo->query('SELECT DISTINCT module_name FROM activity_logs WHERE mod
 <body data-page="activity-logs">
 
   <div class="app-shell" id="appShell">
-    <?php echo renderAdminSidebar('dashboard'); ?>
+    <?php echo renderAdminSidebar('activity-logs'); ?>
 
     <div class="main-col">
       <?php echo renderAdminHeader('Activity Logs'); ?>
@@ -39,7 +51,7 @@ $modules = $pdo->query('SELECT DISTINCT module_name FROM activity_logs WHERE mod
         <div class="page-head">
           <div>
             <h1>Activity Logs</h1>
-            <p class="subtitle">All activities performed by users across the system.</p>
+            <p class="subtitle">Activities performed by <?php echo escape($scopeLabel); ?>.</p>
           </div>
         </div>
 

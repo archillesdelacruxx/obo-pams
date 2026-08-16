@@ -1,11 +1,105 @@
 <?php
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../config/encryption.php';
+define('API_MODE', true);
 startSession();
+
+/* Mobile app (React Native) support: authenticate via Bearer token when no session cookie is present. */
+if (empty($_SESSION['user_id'])) {
+    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+    if ($authHeader === '' && function_exists('getallheaders')) {
+        foreach (getallheaders() as $hName => $hValue) {
+            if (strtolower((string)$hName) === 'authorization') {
+                $authHeader = (string)$hValue;
+                break;
+            }
+        }
+    }
+    if (preg_match('/Bearer\s+(.+)/i', $authHeader, $m)) {
+        $token = trim($m[1]);
+        $pdo = getDB();
+        $tStmt = $pdo->prepare('SELECT * FROM api_tokens WHERE token = ? AND expires_at > NOW() LIMIT 1');
+        $tStmt->execute([$token]);
+        $tokenRow = $tStmt->fetch();
+        if ($tokenRow) {
+            $uStmt = $pdo->prepare('SELECT id, full_name, username, email, profile_photo, is_active, is_admin, role FROM users WHERE id = ? LIMIT 1');
+            $uStmt->execute([$tokenRow['user_id']]);
+            $user = $uStmt->fetch();
+            if ($user && $user['is_active']) {
+                $_SESSION['user_id'] = (int)$user['id'];
+                $_SESSION['full_name'] = $user['full_name'];
+                $_SESSION['username'] = $user['username'];
+                $_SESSION['email'] = $user['email'];
+                $_SESSION['profile_pic'] = $user['profile_photo'];
+                $_SESSION['is_admin'] = (bool)$user['is_admin'];
+                $_SESSION['role'] = $user['role'] ?? 'inspector';
+                $_SESSION['logged_in_at'] = time();
+                $_SESSION['api_token_auth'] = true;
+                $pdo->prepare('UPDATE api_tokens SET last_used_at = NOW() WHERE id = ?')->execute([$tokenRow['id']]);
+            }
+        }
+    }
+}
+
 requireAuth();
 
 $action = $_GET['action'] ?? '';
 $module = $_GET['module'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
+
+/* --------------------------------------------------------------------------
+   CSRF + HTTP method enforcement.
+   GET requests are read-only. Every state-changing action must be sent via
+   POST and — for session-cookie (browser) clients — must carry a valid CSRF
+   token. Mobile requests authenticated through a Bearer token are exempt
+   (an attacker cannot set the Authorization header cross-origin).
+   -------------------------------------------------------------------------- */
+$readOnlyRoutes = [
+    'op/list', 'op/get',
+    'workflow/list', 'workflow/get', 'workflow/export',
+    'approval/list',
+    'releasing/list',
+    'inspection/schedules/list',
+    'inspection/template', 'inspection/checklist/get',
+    'inspection/sync/pull', 'inspection/ai-status',
+    'inspection/stats', 'inspection/history/list', 'inspection/reports/list',
+    'notifications/list', 'notifications/unread-count',
+    'me/permissions',
+    'announcements/list',
+    'activity/list',
+    'dashboard/overview', 'dashboard/stats', 'dashboard/trends', 'dashboard/staff-summary', 'dashboard/export-csv',
+    'profile/view',
+    'settings/modules', 'settings/ai-get',
+    'users/list',
+    'teamleaders/list', 'teamleaders/roster',
+    'export/csv',
+];
+if (!in_array("$module/$action", $readOnlyRoutes, true)) {
+    if ($method !== 'POST') {
+        jsonResponse(['error' => 'Method not allowed. Use POST for this action.'], 405);
+    }
+    if (empty($_SESSION['api_token_auth'])) {
+        $parsedBody = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+        $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($parsedBody['_csrf_token'] ?? '');
+        if (!validateCSRFToken($csrf)) {
+            jsonResponse(['error' => 'Invalid security token. Please refresh the page and try again.'], 403);
+        }
+    }
+}
+
+/* Read the Groq API key from system_settings, transparently handling keys
+   stored in plaintext by older versions. */
+function getAiApiKey(PDO $pdo): string {
+    $stmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
+    $stmt->execute(['ai_api_key']);
+    $val = trim((string)$stmt->fetchColumn());
+    if ($val === '') return '';
+    if (strpos($val, '::') !== false) {
+        $dec = decryptData($val);
+        if ($dec !== '') return $dec;
+    }
+    return $val;
+}
 
 /* Save a base64 data-URL image (signature) into the given uploads subfolder. */
 function inspectionSaveSignature(string $dataUrl, string $subdir): string {
@@ -76,6 +170,16 @@ try {
 
             jsonResponse(['success' => true, 'data' => $records, 'total' => $total, 'page' => $page, 'per_page' => $perPage]);
 
+        case 'op/get':
+            requirePermission('order-of-payment');
+            $opId = (int)($_GET['id'] ?? 0);
+            if (!$opId) jsonResponse(['error' => 'ID required.'], 422);
+            $stmt = $pdo->prepare('SELECT o.*, u.full_name AS encoded_by_name FROM order_of_payments o LEFT JOIN users u ON u.id = o.encoded_by WHERE o.id = ?');
+            $stmt->execute([$opId]);
+            $rec = $stmt->fetch();
+            if (!$rec) jsonResponse(['error' => 'OP record not found.'], 404);
+            jsonResponse(['success' => true, 'data' => $rec]);
+
         case 'op/create':
             requirePermission('order-of-payment');
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
@@ -134,7 +238,8 @@ try {
 
         case 'op/delete':
             requirePermission('order-of-payment');
-            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM order_of_payments WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'op_deleted', "Deleted OP record ID $id");
@@ -255,7 +360,8 @@ try {
 
         case 'workflow/delete':
             requirePermission('permit-workflow');
-            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM permit_workflows WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'workflow_deleted', "Deleted workflow ID $id");
@@ -424,9 +530,51 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             logActivity($_SESSION['user_id'], 'approval_created', "Approved permit $applicationNo ($applicantName)");
             jsonResponse(['success' => true, 'message' => 'Permit approved successfully.']);
 
+        case 'approval/update':
+            requirePermission('permit-approval-encoding');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $appId = (int)($data['id'] ?? 0);
+            if (!$appId) jsonResponse(['error' => 'ID required.'], 422);
+            $check = $pdo->prepare('SELECT id FROM permit_approvals WHERE id = ?');
+            $check->execute([$appId]);
+            if (!$check->fetch()) jsonResponse(['error' => 'Approval record not found.'], 404);
+
+            $applicationNo = trim($data['application_no'] ?? '');
+            $applicantName = trim($data['applicant_name'] ?? '');
+            $permitType = $data['permit_type'] ?? '';
+            $approvalDate = $data['approval_date'] ?? date('Y-m-d');
+            $tat = (int)($data['tat'] ?? 0);
+            $workflowId = !empty($data['workflow_id']) ? (int)$data['workflow_id'] : null;
+            $bpNo = trim($data['bp_no'] ?? '');
+            $location = trim($data['location'] ?? '');
+            $typeOfOccupancy = trim($data['type_of_occupancy'] ?? '');
+            $contractor = trim($data['contractor'] ?? '');
+            $landOthers = ($data['land_others'] ?? '') !== '' ? (float)$data['land_others'] : null;
+            $surcharge = ($data['surcharge'] ?? '') !== '' ? (float)$data['surcharge'] : null;
+            $area = ($data['area'] ?? '') !== '' ? (float)$data['area'] : null;
+            $lineGrade = trim($data['line_grade'] ?? '');
+            $bldgCost = ($data['bldg_cost'] ?? '') !== '' ? (float)$data['bldg_cost'] : null;
+            $permitNo = trim($data['permit_no'] ?? '');
+            $incharge = trim($data['incharge'] ?? '');
+            $orNo = trim($data['or_no'] ?? '');
+            $fees = ($data['fees'] ?? '') !== '' ? (float)$data['fees'] : null;
+            $datePaid = $data['date_paid'] ?? null;
+            $receivedBy = trim($data['received_by'] ?? '');
+            $dateOop = $data['date_oop'] ?? null;
+            $dateReceived = $data['date_received'] ?? null;
+            $dateApproved = $data['date_approved'] ?? null;
+
+            if (!$applicationNo || !$applicantName) jsonResponse(['error' => 'Application No and Applicant Name are required.'], 422);
+
+            $pdo->prepare('UPDATE permit_approvals SET workflow_id=?, application_no=?, applicant_name=?, permit_type=?, approval_date=?, tat=?, bp_no=?, location=?, type_of_occupancy=?, contractor=?, land_others=?, surcharge=?, area=?, line_grade=?, bldg_cost=?, permit_no=?, incharge=?, or_no=?, fees=?, date_paid=?, received_by=?, date_oop=?, date_received=?, date_approved=? WHERE id=?')
+                ->execute([$workflowId, $applicationNo, $applicantName, $permitType, $approvalDate, $tat, $bpNo, $location, $typeOfOccupancy, $contractor, $landOthers, $surcharge, $area, $lineGrade, $bldgCost, $permitNo, $incharge, $orNo, $fees, $datePaid, $receivedBy, $dateOop, $dateReceived, $dateApproved, $appId]);
+            logActivity($_SESSION['user_id'], 'approval_updated', "Updated approval record ID $appId");
+            jsonResponse(['success' => true, 'message' => 'Approval record updated.']);
+
         case 'approval/delete':
             requirePermission('permit-approval-encoding');
-            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM permit_approvals WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'approval_deleted', "Deleted approval record ID $id");
@@ -477,9 +625,32 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             logActivity($_SESSION['user_id'], 'releasing_created', "Released permit $permitAppNo to $claimedBy");
             jsonResponse(['success' => true, 'message' => 'Release record saved.']);
 
+        case 'releasing/update':
+            requirePermission('releasing');
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $relId = (int)($data['id'] ?? 0);
+            if (!$relId) jsonResponse(['error' => 'ID required.'], 422);
+            $check = $pdo->prepare('SELECT id FROM releasing_plans WHERE id = ?');
+            $check->execute([$relId]);
+            if (!$check->fetch()) jsonResponse(['error' => 'Release record not found.'], 404);
+
+            $permitAppNo = trim($data['permit_application_no'] ?? '');
+            $applicantName = trim($data['applicant_name'] ?? '');
+            $dateReleased = $data['date_released'] ?? date('Y-m-d');
+            $claimedBy = trim($data['claimed_by'] ?? '');
+            $timeReleased = $data['time_released'] ?? null;
+
+            if (!$permitAppNo || !$applicantName) jsonResponse(['error' => 'Permit Application No and Applicant are required.'], 422);
+
+            $pdo->prepare('UPDATE releasing_plans SET permit_application_no=?, applicant_name=?, date_released=?, claimed_by=?, time_released=? WHERE id=?')
+                ->execute([$permitAppNo, $applicantName, $dateReleased, $claimedBy, $timeReleased, $relId]);
+            logActivity($_SESSION['user_id'], 'releasing_updated', "Updated release record ID $relId");
+            jsonResponse(['success' => true, 'message' => 'Release record updated.']);
+
         case 'releasing/delete':
             requirePermission('releasing');
-            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM releasing_plans WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'releasing_deleted', "Deleted release record ID $id");
@@ -559,8 +730,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
         case 'inspection/schedules/delete':
             requirePermission('inspection-schedule');
-            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
-            $id = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM inspection_schedules WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'inspection_schedule_deleted', "Deleted inspection schedule ID $id");
@@ -620,8 +791,17 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $stmt->execute([$id]);
                 $existing = $stmt->fetch();
                 if (!$existing) jsonResponse(['error' => 'Inspection record not found.'], 404);
-                if (!in_array($existing['status'], ['Draft', 'Rejected'], true)) {
-                    jsonResponse(['error' => 'Only draft or rejected inspections can be edited.'], 422);
+
+                /* Inspectors may only update their own records while the
+                   record is still a Draft or Rejected. Reviewers with the
+                   inspection-edit module may edit any record. */
+                if (!hasPermission('inspection-edit')) {
+                    if ((int)$existing['inspector_id'] !== (int)$_SESSION['user_id']) {
+                        jsonResponse(['error' => 'You can only edit your own inspection records.'], 403);
+                    }
+                    if (!in_array($existing['status'], ['Draft', 'Rejected'], true)) {
+                        jsonResponse(['error' => 'Only draft or rejected inspection records can be edited.'], 422);
+                    }
                 }
             }
 
@@ -636,6 +816,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $id = (int)$pdo->lastInsertId();
                 logActivity($_SESSION['user_id'], 'inspection_checklist_created', "Created inspection $inspectionNo ($projectTitle)");
             } else {
+                $inspectionNo = $existing['inspection_no'];
                 if (!$applicationNo) $applicationNo = $existing['application_no'];
                 $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, inspector_signature=?, team_leader_1=?, team_leader_2=? WHERE id=?')
                     ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $signaturePath, $teamLeader1, $teamLeader2, $id]);
@@ -644,18 +825,34 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
             $pdo->prepare('DELETE FROM inspection_results WHERE inspection_id = ?')->execute([$id]);
             $resStmt = $pdo->prepare('INSERT INTO inspection_results (inspection_id, template_item_id, category, item_text, item_type, result, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)');
+            $tiExistsStmt = $pdo->prepare('SELECT id FROM inspection_template_items WHERE id = ? LIMIT 1');
+            $tiLookupStmt = $pdo->prepare('SELECT id FROM inspection_template_items WHERE category = ? AND item_text = ? LIMIT 1');
             foreach ($results as $r) {
+                $cat = trim($r['category'] ?? '');
+                $text = trim($r['item_text'] ?? '');
                 $ti = (int)($r['template_item_id'] ?? 0);
-                if (!$ti) continue;
-                $cat = $r['category'] ?? '';
-                $text = $r['item_text'] ?? '';
+                if ($ti) {
+                    $tiExistsStmt->execute([$ti]);
+                    if (!$tiExistsStmt->fetchColumn()) $ti = 0;
+                }
+                if (!$ti && ($cat !== '' || $text !== '')) {
+                    $tiLookupStmt->execute([$cat, $text]);
+                    $ti = (int)$tiLookupStmt->fetchColumn();
+                }
+                if (!$ti && $cat === '' && $text === '') continue;
                 $itype = ($r['item_type'] ?? '') === 'checkbox' ? 'checkbox' : 'radio';
                 $res = in_array($r['result'] ?? '', ['Pass', 'Fail', 'N/A'], true) ? $r['result'] : 'Pass';
                 $rm = trim($r['remarks'] ?? '');
-                $resStmt->execute([$id, $ti, $cat, $text, $itype, $res, $rm]);
+                $resStmt->execute([$id, $ti ?: null, $cat, $text, $itype, $res, $rm]);
             }
 
-            jsonResponse(['success' => true, 'id' => $id, 'message' => 'Inspection checklist saved.']);
+            jsonResponse([
+                'success' => true,
+                'id' => $id,
+                'inspection_no' => $inspectionNo,
+                'application_no' => $applicationNo,
+                'message' => 'Inspection checklist saved.',
+            ]);
 
         case 'inspection/checklist/get':
             requirePermission('inspection-checklist');
@@ -680,10 +877,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
         case 'inspection/ai-status':
             requirePermission('inspection-checklist');
-            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
-            $aiStmt->execute(['ai_api_key']);
-            $aiConfigured = trim((string)$aiStmt->fetchColumn()) !== '';
-            jsonResponse(['success' => true, 'ai_enabled' => $aiConfigured]);
+            jsonResponse(['success' => true, 'ai_enabled' => getAiApiKey($pdo) !== '']);
 
         case 'inspection/remark-ai':
             requirePermission('inspection-checklist');
@@ -693,9 +887,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if (!$category) jsonResponse(['error' => 'Category required.'], 422);
             if (!$items) jsonResponse(['error' => 'No checklist items to summarize.'], 422);
 
-            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
-            $aiStmt->execute(['ai_api_key']);
-            $apiKey = trim((string)$aiStmt->fetchColumn());
+            $apiKey = getAiApiKey($pdo);
             if ($apiKey === '') {
                 jsonResponse(['success' => true, 'ai_enabled' => false, 'message' => 'AI not configured.']);
             }
@@ -730,24 +922,28 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                     CURLOPT_POSTFIELDS => json_encode($payload),
                     CURLOPT_HTTPHEADER => ['Content-Type: application/json', "Authorization: Bearer $apiKey"],
                     CURLOPT_TIMEOUT => 30,
-                    CURLOPT_SSL_VERIFYPEER => false,
-                    CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_SSL_VERIFYPEER => true,
+                    CURLOPT_SSL_VERIFYHOST => 2,
                 ]);
                 $raw = curl_exec($ch);
                 $err = curl_error($ch);
                 curl_close($ch);
-                if ($err) jsonResponse(['error' => "AI request failed: $err"], 502);
+                if ($err) {
+                    error_log("Groq request failed: $err");
+                    jsonResponse(['error' => 'AI provider is unavailable. Please try again.'], 502);
+                }
                 $decoded = json_decode($raw, true);
                 if (isset($decoded['error'])) {
-                    $apiMsg = is_array($decoded['error']) ? ($decoded['error']['message'] ?? json_encode($decoded['error'])) : (string)$decoded['error'];
-                    jsonResponse(['error' => "AI provider error: $apiMsg"], 502);
+                    error_log("Groq error: " . json_encode($decoded['error']));
+                    jsonResponse(['error' => 'AI provider rejected the request.'], 502);
                 }
                 $summary = $decoded['choices'][0]['message']['content'] ?? '';
                 $summary = trim(preg_replace('/\s+/', ' ', (string)$summary));
                 if ($summary === '') jsonResponse(['error' => 'AI returned an empty response.'], 502);
                 jsonResponse(['success' => true, 'ai_enabled' => true, 'summary' => $summary]);
             } catch (Throwable $e) {
-                jsonResponse(['error' => 'AI summary failed: ' . $e->getMessage()], 502);
+                error_log("AI summary failed: " . $e->getMessage());
+                jsonResponse(['error' => 'AI summary failed. Please try again.'], 502);
             }
 
         case 'inspection/checklist/delete':
@@ -755,8 +951,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if (!hasPermission('inspection-delete')) {
                 jsonResponse(['error' => 'You do not have permission to delete inspection records.'], 403);
             }
-            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
-            $id = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $stmt = $pdo->prepare('SELECT inspection_no, project_title FROM inspection_records WHERE id = ?');
             $stmt->execute([$id]);
@@ -780,7 +976,6 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Inspection submitted for review.']);
 
         case 'inspection/checklist/review':
-        case 'inspection/checklist/approve':
         case 'inspection/checklist/reject':
             requirePermission('inspection-checklist');
             if (!hasPermission('inspection-edit')) {
@@ -791,7 +986,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $signature = trim($data['signature'] ?? '');
             $remarks = trim($data['remarks'] ?? '');
-            if (!$signature) jsonResponse(['error' => 'A handwritten signature is required.'], 422);
+            $path = $signature ? inspectionSaveSignature($signature, 'inspection_signatures') : null;
 
             $stmt = $pdo->prepare('SELECT inspection_no, status FROM inspection_records WHERE id = ?');
             $stmt->execute([$id]);
@@ -800,22 +995,13 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
             if ($action === 'checklist/review') {
                 if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Record must be Under Review before reviewing.'], 422);
-                $path = inspectionSaveSignature($signature, 'inspection_signatures');
                 $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
                     ->execute([$_SESSION['user_id'], $path, $remarks, $remarks ? 'Rejected' : 'Approved', $id]);
                 $newStatus = $remarks ? 'Rejected' : 'Approved';
                 logActivity($_SESSION['user_id'], 'inspection_reviewed', "Reviewed inspection {$rec['inspection_no']} as $newStatus");
                 jsonResponse(['success' => true, 'status' => $newStatus, 'message' => "Inspection $newStatus."]);
-            } elseif ($action === 'checklist/approve') {
-                if ($rec['status'] !== 'Approved') jsonResponse(['error' => 'Record must be Approved before final approval.'], 422);
-                $path = inspectionSaveSignature($signature, 'inspection_signatures');
-                $pdo->prepare('UPDATE inspection_records SET approved_by=?, approval_signature=?, approval_date=NOW(), approval_remarks=?, status=? WHERE id=?')
-                    ->execute([$_SESSION['user_id'], $path, $remarks, 'Completed', $id]);
-                logActivity($_SESSION['user_id'], 'inspection_approved', "Completed inspection {$rec['inspection_no']}");
-                jsonResponse(['success' => true, 'status' => 'Completed', 'message' => 'Inspection completed.']);
             } else {
                 if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Only Under Review records can be rejected.'], 422);
-                $path = inspectionSaveSignature($signature, 'inspection_signatures');
                 $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
                     ->execute([$_SESSION['user_id'], $path, $remarks, 'Rejected', $id]);
                 logActivity($_SESSION['user_id'], 'inspection_rejected', "Rejected inspection {$rec['inspection_no']}");
@@ -833,6 +1019,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             if (!in_array($ext, $allowed, true)) jsonResponse(['error' => 'Only image files are allowed (JPG, PNG, GIF, WEBP).'], 422);
             if ($f['error'] !== UPLOAD_ERR_OK || $f['size'] > 8 * 1024 * 1024) jsonResponse(['error' => 'Upload failed or file exceeds 8 MB.'], 422);
+            $imgInfo = @getimagesize($f['tmp_name']);
+            if ($imgInfo === false) jsonResponse(['error' => 'The uploaded file is not a valid image.'], 422);
             $dir = __DIR__ . '/../uploads/inspection_photos/';
             if (!is_dir($dir)) mkdir($dir, 0775, true);
             $name = 'photo_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
@@ -844,8 +1032,8 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
         case 'inspection/photos/remove':
             requirePermission('inspection-checklist');
-            $delData = json_decode(file_get_contents('php://input'), true) ?: [];
-            $photoId = (int)($delData['id'] ?? $_GET['id'] ?? $_POST['id'] ?? 0);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $photoId = (int)($delData['id'] ?? 0);
             if (!$photoId) jsonResponse(['error' => 'Photo ID required.'], 422);
             $stmt = $pdo->prepare('SELECT file_path FROM inspection_photos WHERE id = ?');
             $stmt->execute([$photoId]);
@@ -857,13 +1045,59 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             }
             jsonResponse(['success' => true, 'message' => 'Photo removed.']);
 
+        /* =====================================================================
+           INSPECTION SYNC — Pull admin review decisions back to the mobile app
+           Returns current status + review/approval fields for the caller's own
+           synced records (scoped to the inspector). Admin/editor roles may
+           query any record.
+           ===================================================================== */
+        case 'inspection/sync/pull':
+            requirePermission('inspection-checklist');
+            $syncData = json_decode(file_get_contents('php://input'), true) ?: [];
+            $ids = is_array($syncData['ids'] ?? null) ? array_values(array_filter(array_map('intval', $syncData['ids']))) : [];
+            if (!$ids) jsonResponse(['success' => true, 'data' => []]);
+            $placeholders = implode(',', array_fill(0, count($ids), '?'));
+            $sql = "SELECT r.id, r.inspection_no, r.status, r.updated_at,
+                           rev.full_name AS reviewed_by_name, r.review_remarks, r.review_date,
+                           app.full_name AS approved_by_name, r.approval_remarks, r.approval_date
+                    FROM inspection_records r
+                    LEFT JOIN users rev ON rev.id = r.reviewed_by
+                    LEFT JOIN users app ON app.id = r.approved_by
+                    WHERE r.id IN ($placeholders)";
+            $params = $ids;
+            if (!hasPermission('inspection-edit')) {
+                $sql .= ' AND r.inspector_id = ?';
+                $params[] = $_SESSION['user_id'];
+            }
+            $pullStmt = $pdo->prepare($sql);
+            $pullStmt->execute($params);
+            jsonResponse(['success' => true, 'data' => $pullStmt->fetchAll()]);
+
+        case 'inspection/stats':
+            if (!hasPermission('inspection-checklist') && !hasPermission('inspection-history')) {
+                jsonResponse(['error' => 'Forbidden.'], 403);
+            }
+            $userId = $_SESSION['user_id'];
+            $stmt = $pdo->prepare("SELECT status, COUNT(*) AS c FROM inspection_records WHERE inspector_id = ? GROUP BY status");
+            $stmt->execute([$userId]);
+            $rows = [];
+            foreach ($stmt->fetchAll() as $r) $rows[$r['status']] = (int)$r['c'];
+            jsonResponse(['success' => true, 'data' => [
+                'drafts'       => ($rows['Draft'] ?? 0) + ($rows['Rejected'] ?? 0),
+                'under_review' => $rows['Under Review'] ?? 0,
+                'done'         => ($rows['Approved'] ?? 0) + ($rows['Completed'] ?? 0),
+            ]]);
+
         case 'inspection/history/list':
-            requirePermission('inspection-history');
+            if (!hasPermission('inspection-checklist') && !hasPermission('inspection-history')) {
+                jsonResponse(['error' => 'Forbidden.'], 403);
+            }
             $page = max(1, (int)($_GET['page'] ?? 1));
             $perPage = max(1, min(100, (int)($_GET['per_page'] ?? 50)));
             $offset = ($page - 1) * $perPage;
             $search = trim($_GET['search'] ?? '');
             $status = trim($_GET['status'] ?? '');
+            $inspectorId = (int)($_GET['inspector_id'] ?? 0);
 
             $where = []; $params = [];
             if ($search) {
@@ -871,6 +1105,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
             }
             if ($status) { $where[] = 'r.status = ?'; $params[] = $status; }
+            if ($inspectorId) { $where[] = 'r.inspector_id = ?'; $params[] = $inspectorId; }
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
             $countStmt = $pdo->prepare("SELECT COUNT(*) FROM inspection_records r $whereSql");
@@ -897,7 +1132,13 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $where[] = '(r.inspection_no LIKE ? OR r.permit_no LIKE ? OR r.application_no LIKE ? OR r.project_title LIKE ? OR r.owner_representative LIKE ?)';
                 $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%";
             }
-            if ($status) { $where[] = 'r.status = ?'; $params[] = $status; }
+            if ($status) {
+                $statuses = array_values(array_filter(array_map('trim', explode(',', $status)), function ($s) { return $s !== ''; }));
+                if ($statuses) {
+                    $where[] = 'r.status IN (' . implode(',', array_fill(0, count($statuses), '?')) . ')';
+                    foreach ($statuses as $s) $params[] = $s;
+                }
+            }
             $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
             $stmt = $pdo->prepare("
                 SELECT r.*, u.full_name AS inspector_name, tl1.full_name AS team_leader_1_name, tl2.full_name AS team_leader_2_name
@@ -930,11 +1171,12 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true]);
 
         case 'notifications/mark-read':
-            $id = (int)($_GET['id'] ?? 0);
+            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
             if ($id) {
                 $pdo->prepare('UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?')->execute([$id, $_SESSION['user_id']]);
             } else {
-                $recordId = (int)($_GET['record_id'] ?? 0);
+                $recordId = (int)($data['record_id'] ?? $_GET['record_id'] ?? 0);
                 if ($recordId) {
                     $pdo->prepare("UPDATE notifications SET is_read = 1 WHERE module_name = 'announcements' AND record_id = ? AND user_id = ?")->execute([$recordId, $_SESSION['user_id']]);
                 }
@@ -945,16 +1187,16 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            SELF PERMISSIONS  (drives live sidebar visibility for users)
            ===================================================================== */
         case 'me/permissions':
-            $isAdmin = !empty($_SESSION['is_admin']);
+            $role = $_SESSION['role'] ?? 'inspector';
             $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
-            if ($isAdmin) {
-                $granted = ['dashboard', 'order-of-payment', 'op-records', 'permit-workflow', 'workflow-details', 'permit-approval-encoding', 'permit-approval-records', 'releasing', 'releasing-records', 'notifications', 'announcements', 'profile', 'settings'];
+            if (!empty($_SESSION['is_admin']) && in_array($role, ['developer', 'admin'], true)) {
+                $granted = array_merge($alwaysVisible, array_keys(MODULES));
             } else {
                 $stmt = $pdo->prepare('SELECT module_key FROM user_permissions WHERE user_id = ? AND is_granted = 1');
                 $stmt->execute([$_SESSION['user_id']]);
                 $granted = array_values(array_unique(array_merge($alwaysVisible, $stmt->fetchAll(PDO::FETCH_COLUMN))));
             }
-            jsonResponse(['success' => true, 'granted' => $granted]);
+            jsonResponse(['success' => true, 'granted' => array_values(array_unique($granted))]);
 
         /* =====================================================================
            ANNOUNCEMENTS  (table: announcements)
@@ -965,7 +1207,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         case 'announcements/create':
-            requireAdmin();
+            requireSystemAdmin();
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $tag = $data['tag'] ?? 'Reminder';
             $title = trim($data['title'] ?? '');
@@ -986,8 +1228,9 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Announcement posted and ' . count($recipients) . ' user(s) notified.']);
 
         case 'announcements/delete':
-            requireAdmin();
-            $id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+            requireSystemAdmin();
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->beginTransaction();
             $pdo->prepare("DELETE FROM notifications WHERE module_name = 'announcements' AND record_id = ?")->execute([$id]);
@@ -1000,15 +1243,17 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            ACTIVITY LOGS (table: activity_logs)
            ===================================================================== */
         case 'activity/list':
-            requireAdmin();
+            if (!canViewActivityLogs()) jsonResponse(['error' => 'Forbidden.'], 403);
+            $scopeRole = getActivityLogScope();
             $page = max(1, (int)($_GET['page'] ?? 1));
             $perPage = min(100, max(1, (int)($_GET['per_page'] ?? 50)));
             $offset = ($page - 1) * $perPage;
             $userId = (int)($_GET['user_id'] ?? 0);
             $search = trim($_GET['search'] ?? '');
-            $module = trim($_GET['module'] ?? '');
+            $module = trim($_GET['activity_module'] ?? '');
 
             $where = []; $params = [];
+            if ($scopeRole) { $where[] = 'u.role = ?'; $params[] = $scopeRole; }
             if ($userId) { $where[] = 'a.user_id = ?'; $params[] = $userId; }
             if ($module) { $where[] = 'a.module_name = ?'; $params[] = $module; }
             if ($search) { $where[] = '(a.description LIKE ? OR a.action LIKE ? OR u.full_name LIKE ?)'; $params[] = "%$search%"; $params[] = "%$search%"; $params[] = "%$search%"; }
@@ -1036,11 +1281,19 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             requireAdmin();
             $today = date('Y-m-d');
             $monthStart = date('Y-m-01');
-            $totalUsers = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-            $opToday = (int)$pdo->query("SELECT COUNT(*) FROM order_of_payments WHERE payment_date = '$today'")->fetchColumn();
+            $viewRole = $_SESSION['role'] ?? 'admin';
+            $userScope = $viewRole === 'admin' ? " WHERE role = 'admin_aid'" : '';
+            $totalUsers = (int)$pdo->query('SELECT COUNT(*) FROM users' . $userScope)->fetchColumn();
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM order_of_payments WHERE payment_date = ?');
+            $stmt->execute([$today]);
+            $opToday = (int)$stmt->fetchColumn();
             $activeWorkflows = (int)$pdo->query("SELECT COUNT(*) FROM permit_workflows WHERE status NOT IN ('Approved','Disapproved','Released')")->fetchColumn();
-            $approvalsMonth = (int)$pdo->query("SELECT COUNT(*) FROM permit_approvals WHERE approval_date >= '$monthStart'")->fetchColumn();
-            $releasingToday = (int)$pdo->query("SELECT COUNT(*) FROM releasing_plans WHERE date_released = '$today'")->fetchColumn();
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM permit_approvals WHERE approval_date >= ?');
+            $stmt->execute([$monthStart]);
+            $approvalsMonth = (int)$stmt->fetchColumn();
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM releasing_plans WHERE date_released = ?');
+            $stmt->execute([$today]);
+            $releasingToday = (int)$stmt->fetchColumn();
             $notifCount = (int)$pdo->query('SELECT COUNT(*) FROM notifications WHERE is_read = 0')->fetchColumn();
             jsonResponse(['success' => true, 'data' => [
                 'op' => $opToday,
@@ -1158,7 +1411,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            DASHBOARD STAFF SUMMARY (Admin reports)
            ===================================================================== */
         case 'dashboard/staff-summary':
-            requireAdmin();
+            requireSystemAdmin();
             $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
             $dateTo = $_GET['date_to'] ?? date('Y-m-d');
 
@@ -1178,7 +1431,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            DASHBOARD EXPORT — Staff Productivity Report (.xlsx)
            ===================================================================== */
         case 'dashboard/export-csv':
-            requireAdmin();
+            requireSystemAdmin();
             $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
             $dateTo = $_GET['date_to'] ?? date('Y-m-d');
 
@@ -1259,12 +1512,17 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             requireAuth();
             if (empty($_FILES['photo'])) jsonResponse(['error' => 'No file uploaded.'], 422);
             $file = $_FILES['photo'];
+            if ($file['error'] !== UPLOAD_ERR_OK) jsonResponse(['error' => 'Upload failed.'], 422);
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg','jpeg','png','gif','webp'];
             if (!in_array($ext, $allowed)) jsonResponse(['error' => 'Allowed: jpg, png, gif, webp.'], 422);
-            $dest = __DIR__ . '/../uploads/profile_photos/' . $_SESSION['user_id'] . '.' . $ext;
+            $imgInfo = @getimagesize($file['tmp_name']);
+            if ($imgInfo === false) jsonResponse(['error' => 'The uploaded file is not a valid image.'], 422);
+            $dest = __DIR__ . '/../uploads/profile_photos/pp_' . $_SESSION['user_id'] . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+            $dir = dirname($dest);
+            if (!is_dir($dir)) mkdir($dir, 0775, true);
             if (!move_uploaded_file($file['tmp_name'], $dest)) jsonResponse(['error' => 'Failed to save file.'], 500);
-            $path = 'uploads/profile_photos/' . $_SESSION['user_id'] . '.' . $ext;
+            $path = 'uploads/profile_photos/' . basename($dest);
             $pdo->prepare('UPDATE users SET profile_photo = ? WHERE id = ?')->execute([$path, $_SESSION['user_id']]);
             $_SESSION['profile_pic'] = $path;
             logActivity($_SESSION['user_id'], 'profile_photo_updated', 'Profile photo updated');
@@ -1274,7 +1532,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            SETTINGS (system_settings)
            ===================================================================== */
         case 'settings/modules':
-            requireAdmin();
+            requireSystemAdmin();
             $moduleLabels = [
                 'order-of-payment' => 'Order of Payment',
                 'op-records' => 'OP Records',
@@ -1304,21 +1562,20 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'data' => $modules]);
 
         case 'settings/ai-get':
-            requireAdmin();
-            $aiStmt = $pdo->prepare('SELECT setting_value FROM system_settings WHERE setting_key = ?');
-            $aiStmt->execute(['ai_api_key']);
-            jsonResponse(['success' => true, 'data' => ['ai_api_key' => (string)$aiStmt->fetchColumn()]]);
+            requireSystemAdmin();
+            jsonResponse(['success' => true, 'data' => ['ai_api_key' => getAiApiKey($pdo)]]);
 
         case 'settings/ai-save':
-            requireAdmin();
+            requireSystemAdmin();
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $val = trim((string)($data['ai_api_key'] ?? ''));
+            $stored = $val === '' ? '' : encryptData($val);
             $pdo->prepare('INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?')
-                ->execute(['ai_api_key', $val, $val]);
+                ->execute(['ai_api_key', $stored, $stored]);
             jsonResponse(['success' => true, 'message' => 'AI settings saved.']);
 
         case 'settings/toggle-module':
-            requireAdmin();
+            requireSystemAdmin();
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $key = $data['key'] ?? '';
             $status = $data['status'] ?? 'active';
@@ -1340,17 +1597,23 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Settings saved.']);
 
         case 'users/list':
-            requireAdmin();
-            $stmt = $pdo->query('SELECT u.id, u.full_name, u.username, u.email, u.is_admin, u.is_active, u.role, u.created_at, u.last_login, GROUP_CONCAT(up.module_key) AS granted_modules FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id AND up.is_granted = 1 GROUP BY u.id ORDER BY u.created_at DESC');
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
+            $stmt = $pdo->query('SELECT u.id, u.full_name, u.username, u.email, u.is_admin, u.is_active, u.role, u.position, u.created_at, u.last_login, GROUP_CONCAT(up.module_key) AS granted_modules FROM users u LEFT JOIN user_permissions up ON up.user_id = u.id AND up.is_granted = 1 GROUP BY u.id ORDER BY u.created_at DESC');
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         case 'users/toggle-permission':
-            requireAdmin();
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $userId = (int)($data['user_id'] ?? 0);
             $moduleKey = $data['module_key'] ?? '';
             $granted = !empty($data['is_granted']) ? 1 : 0;
             if (!$userId || !$moduleKey) jsonResponse(['error' => 'User ID and module key required.'], 422);
+            $roleRow = $pdo->prepare('SELECT role FROM users WHERE id = ?');
+            $roleRow->execute([$userId]);
+            $targetRole = $roleRow->fetchColumn();
+            if ($userId !== (int)$_SESSION['user_id'] && !canRegisterRole((string)$targetRole)) {
+                jsonResponse(['error' => 'You cannot change access for users with this role.'], 403);
+            }
             $stmt = $pdo->prepare('SELECT id FROM user_permissions WHERE user_id = ? AND module_key = ?');
             $stmt->execute([$userId, $moduleKey]);
             if ($stmt->fetch()) {
@@ -1361,7 +1624,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Permission updated.']);
 
         case 'users/create':
-            requireAdmin();
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $fullName = trim($data['fullName'] ?? $data['full_name'] ?? '');
             $username = trim($data['username'] ?? '');
@@ -1370,7 +1633,12 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $position = $data['position'] ?? '';
             $modules = $data['modules'] ?? [];
             if (!$fullName || !$username || !$password) jsonResponse(['error' => 'Full name, username, and password required.'], 422);
-            if (!in_array($role, ['developer', 'admin', 'admin_aid', 'inspector'])) jsonResponse(['error' => 'Invalid role.'], 422);
+            if (!in_array($role, ['developer', 'admin', 'admin_aid', 'inspector', 'inspector-admin'])) jsonResponse(['error' => 'Invalid role.'], 422);
+            if (!canRegisterRole($role)) jsonResponse(['error' => 'You can only register users with an allowed role.'], 403);
+            $roleModules = getRoleModuleKeys($role);
+            if ($roleModules !== null) {
+                $modules = array_values(array_intersect(is_array($modules) ? $modules : [], $roleModules));
+            }
             $stmt = $pdo->prepare('SELECT id FROM users WHERE username = ?');
             $stmt->execute([$username]);
             if ($stmt->fetch()) jsonResponse(['error' => 'Username already exists.'], 422);
@@ -1388,19 +1656,41 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'User created.']);
 
         case 'users/update':
-            requireAdmin();
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $userId = (int)($data['id'] ?? 0);
             $fullName = trim($data['fullName'] ?? $data['full_name'] ?? '');
-            $role = $data['role'] ?? '';
-            $position = $data['position'] ?? '';
+            $role = trim((string)($data['role'] ?? ''));
+            $position = trim((string)($data['position'] ?? ''));
             $modules = $data['modules'] ?? null;
             if (!$userId || !$fullName) jsonResponse(['error' => 'User ID and full name required.'], 422);
-            if ($role && !in_array($role, ['developer', 'admin', 'admin_aid', 'inspector'])) jsonResponse(['error' => 'Invalid role.'], 422);
-            $isadmin = in_array($role, ['developer', 'admin', 'admin_aid']) ? 1 : 0;
+
+            $targetStmt = $pdo->prepare('SELECT role, is_admin FROM users WHERE id = ?');
+            $targetStmt->execute([$userId]);
+            $target = $targetStmt->fetch();
+            if (!$target) jsonResponse(['error' => 'User not found.'], 404);
+
+            $effectiveRole = $role !== '' ? $role : (string)$target['role'];
+            if ($role !== '' && !in_array($role, ['developer', 'admin', 'admin_aid', 'inspector', 'inspector-admin'], true)) {
+                jsonResponse(['error' => 'Invalid role.'], 422);
+            }
+            if ($userId === (int)$_SESSION['user_id']) {
+                if ($role !== '' && $role !== (string)$target['role']) {
+                    jsonResponse(['error' => 'You cannot change your own role.'], 403);
+                }
+                $effectiveRole = (string)$target['role'];
+            } elseif (!canRegisterRole($effectiveRole)) {
+                jsonResponse(['error' => 'You cannot manage users with this role.'], 403);
+            }
+
+            $isadmin = in_array($effectiveRole, ['developer', 'admin', 'admin_aid']) ? 1 : 0;
             $pdo->prepare('UPDATE users SET full_name = ?, is_admin = ?, role = ?, position = ? WHERE id = ?')
-                ->execute([$fullName, $isadmin, $role, $position, $userId]);
+                ->execute([$fullName, $isadmin, $effectiveRole, $position, $userId]);
             if (is_array($modules)) {
+                $roleModules = getRoleModuleKeys($effectiveRole);
+                if ($roleModules !== null) {
+                    $modules = array_values(array_intersect($modules, $roleModules));
+                }
                 $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$userId]);
                 $permStmt = $pdo->prepare('INSERT INTO user_permissions (user_id, module_key, is_granted) VALUES (?, ?, 1)');
                 foreach ($modules as $mod) {
@@ -1411,11 +1701,16 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'User updated.']);
 
         case 'users/delete':
-            requireAdmin();
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: [];
             $userId = (int)($data['id'] ?? 0);
             if (!$userId) jsonResponse(['error' => 'User ID required.'], 422);
             if ($userId == $_SESSION['user_id']) jsonResponse(['error' => 'Cannot delete your own account.'], 422);
+            $roleRow = $pdo->prepare('SELECT role FROM users WHERE id = ?');
+            $roleRow->execute([$userId]);
+            if (!canRegisterRole((string)$roleRow->fetchColumn())) {
+                jsonResponse(['error' => 'You cannot delete users with this role.'], 403);
+            }
             $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$userId]);
             $pdo->prepare('DELETE FROM activity_logs WHERE user_id = ?')->execute([$userId]);
             $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$userId]);
@@ -1423,10 +1718,17 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'User deleted.']);
 
         case 'users/reset-password':
-            requireAdmin();
+            if (!canManageUsers()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: [];
             $userId = (int)($data['id'] ?? 0);
             if (!$userId) jsonResponse(['error' => 'User ID required.'], 422);
+            if ($userId !== (int)$_SESSION['user_id']) {
+                $roleRow = $pdo->prepare('SELECT role FROM users WHERE id = ?');
+                $roleRow->execute([$userId]);
+                if (!canRegisterRole((string)$roleRow->fetchColumn())) {
+                    jsonResponse(['error' => 'You cannot reset passwords for users with this role.'], 403);
+                }
+            }
             $tempPw = bin2hex(random_bytes(4));
             $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')
                 ->execute([password_hash($tempPw, PASSWORD_DEFAULT), $userId]);
@@ -1436,7 +1738,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
            TEAM LEADERS  (table: team_leaders)
            ===================================================================== */
         case 'teamleaders/list':
-            requireAdmin();
+            if (!canManageTeamLeaders()) jsonResponse(['error' => 'Forbidden.'], 403);
             $stmt = $pdo->query('SELECT id, full_name, position, team_no, is_active, created_at FROM team_leaders ORDER BY team_no, full_name');
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
@@ -1445,7 +1747,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
 
         case 'teamleaders/create':
-            requireAdmin();
+            if (!canManageTeamLeaders()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $fullName = trim($data['full_name'] ?? '');
             $position = trim($data['position'] ?? '');
@@ -1458,7 +1760,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'id' => (int)$pdo->lastInsertId(), 'message' => 'Team leader registered.']);
 
         case 'teamleaders/update':
-            requireAdmin();
+            if (!canManageTeamLeaders()) jsonResponse(['error' => 'Forbidden.'], 403);
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $id = (int)($data['id'] ?? 0);
             $fullName = trim($data['full_name'] ?? '');
@@ -1472,9 +1774,9 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['success' => true, 'message' => 'Team leader updated.']);
 
         case 'teamleaders/delete':
-            requireAdmin();
-            $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
-            $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
+            if (!canManageTeamLeaders()) jsonResponse(['error' => 'Forbidden.'], 403);
+            $delData = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+            $id = (int)($delData['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
             $pdo->prepare('DELETE FROM team_leaders WHERE id = ?')->execute([$id]);
             logActivity($_SESSION['user_id'], 'team_leader_deleted', "Deleted team leader ID $id");
@@ -1552,8 +1854,13 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $table = preg_replace('/[^a-z_]/', '', $_GET['table'] ?? '');
             if (!$table) jsonResponse(['error' => 'Invalid table.'], 422);
 
-            $allowed = ['order_of_payment', 'permit_approval', 'releasing'];
-            if (!in_array($table, $allowed)) jsonResponse(['error' => 'Table not allowed.'], 403);
+            $allowed = [
+                'order_of_payment' => 'op-records',
+                'permit_approval' => 'permit-approval-records',
+                'releasing' => 'releasing-records',
+            ];
+            if (!array_key_exists($table, $allowed)) jsonResponse(['error' => 'Table not allowed.'], 403);
+            if (!hasPermission($allowed[$table])) jsonResponse(['error' => 'Forbidden.'], 403);
 
             require_once __DIR__ . '/../includes/XlsxWriter.php';
 
@@ -1629,7 +1936,9 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             jsonResponse(['error' => "Unknown action: $module/$action"], 404);
     }
 } catch (PDOException $e) {
-    jsonResponse(['error' => 'Database error: ' . $e->getMessage()], 500);
-} catch (Exception $e) {
-    jsonResponse(['error' => $e->getMessage()], 500);
+    error_log('API DB error: ' . $e->getMessage());
+    jsonResponse(['error' => 'A database error occurred. Please try again.'], 500);
+} catch (Throwable $e) {
+    error_log('API error: ' . $e->getMessage());
+    jsonResponse(['error' => 'An unexpected error occurred. Please try again.'], 500);
 }

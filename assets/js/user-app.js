@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'inspection-schedule': initInspectionSchedulePage,
     'inspection-checklist': initInspectionChecklistPage,
     'inspection-reports': initInspectionReportsPage,
+    'inspection-review': initInspectionReviewPage,
+    'team-leaders': initTeamLeadersPage,
     'inspection-history': initInspectionHistoryPage,
     'user-settings': initUserSettingsPage,
     'user-profile': initUserProfilePage
@@ -326,8 +328,8 @@ async function loadOpRecentRecords() {
 }
 
 async function viewOpRecord(id) {
-  const res = await apiGet('op', 'list', { id });
-  const r = Array.isArray(res.data) ? res.data.find(d => d.id == id) : null;
+  const res = await apiGet('op', 'get', { id });
+  const r = res.data || null;
   if (!r) { showToast({ title: 'Not found', message: 'Record not found.', type: 'danger' }); return; }
   openModal(`
     <div class="modal-head"><h3>OP Record · ${r.transaction_no}</h3><button class="icon-btn" data-close-modal aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
@@ -350,8 +352,8 @@ async function viewOpRecord(id) {
 }
 
 async function editOpRecord(id) {
-  const res = await apiGet('op', 'list', { id });
-  const r = Array.isArray(res.data) ? res.data.find(d => d.id == id) : null;
+  const res = await apiGet('op', 'get', { id });
+  const r = res.data || null;
   if (!r) { showToast({ title: 'Not found', message: 'Record not found.', type: 'danger' }); return; }
   const permitTypes = ['New Business Permit','Renewal — Food Services','Occupancy Permit','Zoning Clearance','Signage Permit','Ancillary/Accessory'];
   openModal(`
@@ -555,8 +557,6 @@ async function editWorkflow(id) {
           <div class="form-group"><label>Assessment Approval</label><input class="form-control" id="editAssessment" value="${r.assessment_approval || ''}"></div>
           <div class="form-group"><label>Date Paid</label><input class="form-control" type="date" id="editDatePaid" value="${r.date_paid || ''}"></div>
           <div class="form-group"><label>Released</label><input class="form-control" type="date" id="editReleased" value="${r.released || ''}"></div>
-          <div class="form-group"><label>Date Paid</label><input class="form-control" type="date" id="editDatePaid" value="${r.date_paid || ''}"></div>
-          <div class="form-group"><label>Released</label><input class="form-control" type="date" id="editReleased" value="${r.released || ''}"></div>
           <div class="form-group"><label>First In Date</label><input class="form-control" type="date" id="editFirstIn" value="${r.first_in || ''}"></div>
           <div class="form-group"><label>Status</label><select class="form-control" id="editStatus"><option value="Pending" ${r.status === 'Pending' ? 'selected' : ''}>Pending</option><option value="Under Review" ${r.status === 'Under Review' ? 'selected' : ''}>Under Review</option><option value="Approved" ${r.status === 'Approved' ? 'selected' : ''}>Approved</option><option value="Disapproved" ${r.status === 'Disapproved' ? 'selected' : ''}>Disapproved</option><option value="Released" ${r.status === 'Released' ? 'selected' : ''}>Released</option></select></div>
         </div>
@@ -636,7 +636,6 @@ function openCreateWorkflowModal(onSuccess) {
               <option value="Approved">Approved</option>
             </select>
           </div>
-        </div>
         </div>
       </form>
     </div>
@@ -1583,7 +1582,7 @@ async function initAnnouncementsPage() {
 }
 
 function openAnnouncementModal(a) {
-  apiGet('notifications', 'mark-read', { record_id: a.id }).catch(() => {});
+  apiPost('notifications', 'mark-read', { record_id: a.id }).catch(() => {});
   openModal(`
     <div class="modal-head">
       <h3>${a.title}</h3>
@@ -2071,7 +2070,6 @@ async function initInspectionChecklistPage() {
 
   const canManage = () => getPermSet().has('inspection-edit');
 
-  const reviewPad = initSignaturePad($('#inschReviewCanvas'));
   const $form = $('#inschForm');
   const resultsBody = $('#inschResultsBody');
 
@@ -2113,24 +2111,19 @@ async function initInspectionChecklistPage() {
     const reviewCard = $('#inschReviewCard');
     const approveBtn = $('#inschApproveBtn');
     const rejectBtn = $('#inschRejectBtn');
+    const remarksWrap = $('#inschReviewRemarksWrap');
     if (canManage() && status === 'Under Review') {
       reviewCard.style.display = '';
-      $('#inschReviewTitle').textContent = 'Review · Sign to Approve';
+      $('#inschReviewTitle').textContent = 'Review';
       approveBtn.style.display = '';
-      approveBtn.textContent = 'Approve & Sign';
-      approveBtn.dataset.action = 'review';
+      approveBtn.textContent = 'Approve';
       rejectBtn.style.display = '';
-    } else if (canManage() && status === 'Approved') {
-      reviewCard.style.display = '';
-      $('#inschReviewTitle').textContent = 'Final Approval · Sign to Complete';
-      approveBtn.style.display = '';
-      approveBtn.textContent = 'Complete & Sign';
-      approveBtn.dataset.action = 'approve';
-      rejectBtn.style.display = 'none';
+      if (remarksWrap) remarksWrap.style.display = 'none';
     } else {
       reviewCard.style.display = 'none';
       approveBtn.style.display = 'none';
       rejectBtn.style.display = 'none';
+      if (remarksWrap) remarksWrap.style.display = 'none';
     }
   }
 
@@ -2447,20 +2440,13 @@ async function initInspectionChecklistPage() {
   });
 
   $('#inschApproveBtn') && $('#inschApproveBtn').addEventListener('click', async () => {
-    const action = $('#inschApproveBtn').dataset.action;
-    if (!recordId || (action !== 'review' && action !== 'approve')) return;
-    if (!reviewPad || reviewPad.isEmpty()) {
-      showToast({ title: 'Signature required', message: 'Please affix your handwritten signature.', type: 'warning' });
-      return;
-    }
-    const res = await apiPost('inspection', action === 'review' ? 'checklist/review' : 'checklist/approve', {
+    if (!recordId) return;
+    const res = await apiPost('inspection', 'checklist/review', {
       id: recordId,
-      signature: reviewPad.toDataURL(),
-      remarks: ''
+      remarks: '',
     });
     if (res.success) {
       showToast({ title: 'Done', message: res.message, type: 'success' });
-      reviewPad.clear();
       $('#inschReviewRemarks').value = '';
       await refreshRecord();
     } else {
@@ -2470,27 +2456,24 @@ async function initInspectionChecklistPage() {
 
   $('#inschRejectBtn') && $('#inschRejectBtn').addEventListener('click', async () => {
     if (!recordId) return;
-    if (!reviewPad || reviewPad.isEmpty()) {
-      showToast({ title: 'Signature required', message: 'Please affix your handwritten signature.', type: 'warning' });
-      return;
-    }
-    const remarks = $('#inschReviewRemarks').value.trim();
+    const remarksEl = $('#inschReviewRemarks');
+    const remarksWrap = $('#inschReviewRemarksWrap');
+    const remarks = remarksEl ? remarksEl.value.trim() : '';
     if (!remarks) {
+      if (remarksWrap) remarksWrap.style.display = '';
+      if (remarksEl) remarksEl.focus();
       showToast({ title: 'Rejection reason required', message: 'Please enter a remark explaining the rejection.', type: 'warning' });
       return;
     }
-    const res = await apiPost('inspection', 'checklist/review', { id: recordId, signature: reviewPad.toDataURL(), remarks });
+    const res = await apiPost('inspection', 'checklist/review', { id: recordId, remarks });
     if (res.success) {
       showToast({ title: 'Rejected', message: res.message, type: 'success' });
-      reviewPad.clear();
-      $('#inschReviewRemarks').value = '';
+      if (remarksEl) remarksEl.value = '';
       await refreshRecord();
     } else {
       showToast({ title: 'Error', message: res.error, type: 'danger' });
     }
   });
-
-  $('#inschReviewSigClear') && $('#inschReviewSigClear').addEventListener('click', () => reviewPad && reviewPad.clear());
 
   resultsBody.addEventListener('change', updateSummary);
   window.addEventListener('insch-photos-changed', () => { refreshRecord(); });
@@ -2589,11 +2572,9 @@ async function initInspectionReportsPage() {
   if (!tbody) return;
 
   async function loadReports() {
-    const params = {};
+    const params = { status: 'Completed,Approved' };
     const search = $('#insrSearch')?.value.trim() || '';
-    const status = $('#insrStatusFilter')?.value || '';
     if (search) params.search = search;
-    if (status) params.status = status;
     const res = await apiGet('inspection', 'reports/list', params).catch(() => ({ data: [] }));
     const rows = res.data || [];
     const canEdit = getPermSet().has('inspection-edit');
@@ -2619,13 +2600,244 @@ async function initInspectionReportsPage() {
 
   $('#insrRefreshBtn')?.addEventListener('click', loadReports);
   $('#insrSearch')?.addEventListener('input', debounce(loadReports, 250));
-  $('#insrStatusFilter')?.addEventListener('change', loadReports);
   $('#insrPrintReportBtn')?.addEventListener('click', () => window.print());
   window.addEventListener('beforeprint', fitReportToPage);
   window.addEventListener('afterprint', resetReportFit);
   bindInlineModal('#insrReportModal');
 
   await loadReports();
+}
+
+/* --------------------------------------------------------------------------
+   INSPECTION REVIEW page (Under Review queue + final approval)
+   -------------------------------------------------------------------------- */
+function closeInlineModal(modalId) {
+  const w = $(modalId);
+  if (w) {
+    w.classList.remove('open');
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow = '';
+  }
+}
+
+async function initInspectionReviewPage() {
+  const tbody = $('#insrqTbody');
+  if (!tbody) return;
+  const status = 'Under Review';
+  let search = '';
+
+  const title = $('#insrqModalTitle');
+  const info = $('#insrqRecordInfo');
+  const remarksEl = $('#insrqRemarks');
+  const remarksWrap = $('#insrqRemarksWrap');
+  const approveBtn = $('#insrqApproveBtn');
+  const rejectBtn = $('#insrqRejectBtn');
+  let currentId = null;
+
+  async function loadQueue() {
+    const res = await apiGet('inspection', 'reports/list', { status }).catch(() => ({ data: [] }));
+    const rows = res.data || [];
+    const canEdit = getPermSet().has('inspection-edit');
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? rows.filter(r =>
+          [r.inspection_no, r.application_no, r.project_title, r.inspector_name, r.team_leader_1_name, r.team_leader_2_name]
+            .some(v => v && String(v).toLowerCase().includes(q)),
+        )
+      : rows;
+    const t = $('#insrqTitle');
+    if (t) t.textContent = `${status} Queue (${filtered.length})`;
+    tbody.innerHTML = filtered.map(r => `
+      <tr>
+        <td class="cell-mono">${escapeHtml(r.inspection_no)}</td>
+        <td class="cell-mono">${escapeHtml(r.application_no)}</td>
+        <td><strong>${escapeHtml(r.project_title)}</strong></td>
+        <td>${r.inspection_date ? formatDate(r.inspection_date) : '—'}</td>
+        <td>${escapeHtml(r.team_leader_1_name || '—')}${r.team_leader_2_name ? ', ' + escapeHtml(r.team_leader_2_name) : ', <span class="text-muted">No Team 2</span>'}</td>
+        <td>${escapeHtml(r.inspector_name || '—')}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn" title="View report" onclick="viewQueueReport(${r.id})">${userIcon('eye')}</button>
+          ${canEdit && status === 'Under Review' ? `
+            <button class="icon-btn" title="Approve" style="color:var(--success);" onclick="openQueueReview(${r.id}, 'approve')">${userIcon('check')}</button>
+            <button class="icon-btn" title="Reject" style="color:var(--danger);" onclick="openQueueReview(${r.id}, 'reject')">${userIcon('x')}</button>` : ''}
+        </div></td>
+      </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--gray-400);">No ${status.toLowerCase()} inspections found.</td></tr>`;
+    const count = $('#insrqCount');
+    if (count) count.textContent = filtered.length;
+    const pi = $('#insrqPageInfo');
+    if (pi) pi.textContent = `${filtered.length} record${filtered.length === 1 ? '' : 's'}`;
+  }
+
+  window.viewQueueReport = async (id) => {
+    const res = await apiGet('inspection', 'checklist/get', { id });
+    if (!res.success) { showToast({ title: 'Error', message: res.error, type: 'danger' }); return; }
+    const body = $('#insrqReportBody');
+    if (body) body.innerHTML = renderReportDoc(res.data);
+    bindInlineModal('#insrqReportModal');
+    openInlineModal('#insrqReportModal');
+  };
+
+  window.openQueueReview = (id, mode) => {
+    currentId = id;
+    if (remarksEl) remarksEl.value = '';
+    const isReject = mode === 'reject';
+    if (title) title.textContent = isReject ? 'Reject Inspection' : 'Approve Inspection';
+    if (info) info.textContent = isReject
+      ? 'Add a remark explaining the rejection.'
+      : 'Approve this inspection.';
+    if (remarksWrap) remarksWrap.hidden = !isReject;
+    if (approveBtn) approveBtn.style.display = isReject ? 'none' : '';
+    if (rejectBtn) rejectBtn.style.display = isReject ? '' : 'none';
+    bindInlineModal('#insrqModal');
+    openInlineModal('#insrqModal');
+  };
+
+  const doAction = async (action, remarks) => {
+    if (!currentId) return;
+    if (action === 'reject' && !remarks.trim()) {
+      showToast({ title: 'Rejection reason required', message: 'Please enter a remark explaining the rejection.', type: 'warning' });
+      return;
+    }
+    const res = await apiPost('inspection', 'checklist/review', {
+      id: currentId,
+      remarks: action === 'reject' ? remarks : '',
+    });
+    closeInlineModal('#insrqModal');
+    if (res.success) {
+      showToast({ title: 'Done', message: res.message, type: 'success' });
+      await loadQueue();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  };
+
+  approveBtn?.addEventListener('click', () => doAction('approve', ''));
+  rejectBtn?.addEventListener('click', () => doAction('reject', remarksEl ? remarksEl.value : ''));
+  $('#insrqRefreshBtn')?.addEventListener('click', loadQueue);
+  $('#insrqSearch')?.addEventListener('input', (e) => {
+    search = e.target.value;
+    loadQueue();
+  });
+
+  await loadQueue();
+}
+
+/* --------------------------------------------------------------------------
+   TEAM LEADERS page (register / edit / delete team leaders)
+   -------------------------------------------------------------------------- */
+async function initTeamLeadersPage() {
+  const tbody = $('#tlTbody');
+  if (!tbody) return;
+  let TEAM_LEADERS = [];
+  let editingId = null;
+
+  const nameEl = $('#tlName');
+  const posEl = $('#tlPosition');
+
+  window.tlPickTeam = (teamNo, el) => {
+    el.closest('.tl-team-grid').querySelectorAll('.tl-team-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    const hidden = $('#tlTeam');
+    if (hidden) hidden.value = String(teamNo);
+  };
+
+  async function loadLeaders() {
+    const res = await apiGet('teamleaders', 'list').catch(() => null);
+    if (res && res.success) {
+      TEAM_LEADERS = res.data.map(l => ({ ...l, team_no: parseInt(l.team_no, 10) }));
+    }
+    tbody.innerHTML = TEAM_LEADERS.map(l => {
+      const teamBadge = String(l.team_no) === '2'
+        ? '<span class="badge badge-info">Team 2</span>'
+        : '<span class="badge badge-success">Team 1</span>';
+      const activeBadge = l.is_active == 1
+        ? '<span class="badge badge-success">Active</span>'
+        : '<span class="badge badge-neutral">Inactive</span>';
+      return `<tr data-id="${l.id}">
+        <td class="cell-user"><div class="avatar sm">${initials(l.full_name)}</div><div><strong>${escapeHtml(l.full_name)}</strong></div></td>
+        <td>${escapeHtml(l.position || '—')}</td>
+        <td>${teamBadge}</td>
+        <td>${activeBadge}</td>
+        <td><div class="row-actions">
+          <button class="icon-btn tl-edit-btn" data-id="${l.id}" title="Edit">${userIcon('edit')}</button>
+          <button class="icon-btn tl-del-btn" data-id="${l.id}" title="Delete" style="color:var(--danger);">${userIcon('trash')}</button>
+        </div></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-400);">No team leaders registered yet.</td></tr>';
+
+    const count = $('#tlCount');
+    if (count) count.textContent = TEAM_LEADERS.length;
+    const pi = $('#tlPageInfo');
+    if (pi) pi.textContent = `${TEAM_LEADERS.length} team leader${TEAM_LEADERS.length === 1 ? '' : 's'}`;
+
+    tbody.querySelectorAll('.tl-edit-btn').forEach(btn => btn.addEventListener('click', () => {
+      const l = TEAM_LEADERS.find(x => x.id === parseInt(btn.dataset.id, 10));
+      if (l) openForm(l);
+    }));
+    tbody.querySelectorAll('.tl-del-btn').forEach(btn => btn.addEventListener('click', () => {
+      const l = TEAM_LEADERS.find(x => x.id === parseInt(btn.dataset.id, 10));
+      if (l) confirmDelete(l);
+    }));
+  }
+
+  function openForm(l) {
+    editingId = l ? l.id : null;
+    const t = $('#tlModalTitle');
+    if (t) t.textContent = l ? 'Edit Team Leader' : 'Register Team Leader';
+    if (nameEl) nameEl.value = l ? l.full_name : '';
+    if (posEl) posEl.value = l ? (l.position || '') : '';
+    document.querySelectorAll('#tlFormModal .tl-team-card').forEach(c => {
+      const on = c.dataset.team === String(l ? l.team_no : 1);
+      c.classList.toggle('selected', on);
+    });
+    const hidden = $('#tlTeam');
+    if (hidden) hidden.value = String(l ? l.team_no : 1);
+    bindInlineModal('#tlFormModal');
+    openInlineModal('#tlFormModal');
+  }
+
+  function confirmDelete(l) {
+    openConfirm({
+      title: 'Delete team leader?',
+      message: `Remove ${l.full_name} from the team leader registry? Existing reports keep their name.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        const res = await apiPost('teamleaders', 'delete', { id: l.id });
+        closeModal();
+        if (res.success) {
+          showToast({ title: 'Deleted', message: res.message, type: 'success' });
+          await loadLeaders();
+        } else {
+          showToast({ title: 'Error', message: res.error, type: 'danger' });
+        }
+      }
+    });
+  }
+
+  $('#tlCreateBtn')?.addEventListener('click', () => openForm(null));
+  $('#tlRefreshBtn')?.addEventListener('click', loadLeaders);
+  $('#tlSaveBtn')?.addEventListener('click', async () => {
+    const fullName = nameEl ? nameEl.value.trim() : '';
+    if (!fullName) { if (nameEl) nameEl.reportValidity(); return; }
+    const payload = {
+      full_name: fullName,
+      position: (posEl ? posEl.value : '').trim(),
+      team_no: ($('#tlTeam') ? $('#tlTeam').value : '1')
+    };
+    const res = editingId
+      ? await apiPost('teamleaders', 'update', { ...payload, id: editingId })
+      : await apiPost('teamleaders', 'create', payload);
+    closeInlineModal('#tlFormModal');
+    if (res.success) {
+      showToast({ title: 'Team Leader ' + (editingId ? 'updated' : 'registered'), message: res.message, type: 'success' });
+      await loadLeaders();
+    } else {
+      showToast({ title: 'Error', message: res.error, type: 'danger' });
+    }
+  });
+
+  await loadLeaders();
 }
 
 async function viewInspectionReport(id) {
@@ -2781,7 +2993,7 @@ function initUserProfilePage() {
   const roleEl = $('#profileRole');
   if (roleEl) {
     const role = document.body.dataset.role || 'inspector';
-    const roleMap = { developer: 'Developer', admin: 'Administrator', admin_aid: 'Admin Aid', inspector: 'Inspector' };
+    const roleMap = { developer: 'System Administrator', admin: 'Administrator', admin_aid: 'Admin Aid', 'inspector-admin': 'Inspector Admin', inspector: 'Inspector' };
     roleEl.textContent = roleMap[role] || 'Inspector';
   }
 

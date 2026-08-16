@@ -124,6 +124,8 @@ function initProfilePhotoUpload(camBtnId, fileInputId, avatarWrap, fallbackName)
     if (!file) return;
     const fd = new FormData();
     fd.append('photo', file);
+    const m = document.querySelector('meta[name="csrf-token"]');
+    if (m) fd.append('_csrf_token', m.getAttribute('content') || '');
     try {
       const res = await fetch(apiBase() + '?module=profile&action=upload-photo', { method: 'POST', body: fd });
       const data = await res.json();

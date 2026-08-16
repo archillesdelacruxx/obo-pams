@@ -34,6 +34,10 @@ async function initDashboardPage(){
     $('#notifBtn')?.click();
   });
 
+  $('#generateReportBtn')?.addEventListener('click', () => {
+    window.location.href = 'reports.php';
+  });
+
   const dash = window.DASHBOARD_DATA || null;
 
   if (dash && dash.monthly && dash.monthly.series && dash.monthly.series.length) {
@@ -107,7 +111,7 @@ async function initActivityLogsPage(){
     const module = $('#activityModuleFilter')?.value || '';
     const search = $('#activitySearch')?.value.trim() || '';
     if (userId) params.user_id = userId;
-    if (module) params.module = module;
+    if (module) params.activity_module = module;
     if (search) params.search = search;
 
     const res = await apiGet('activity', 'list', params).catch(() => ({ data: [], total: 0, page: 1, per_page: perPage }));
@@ -358,8 +362,8 @@ async function initUserManagementPage(){
 
   const roleBadge = (r) => {
     const role = (r || 'inspector').toLowerCase();
-    if (role === 'developer') return '<span class="badge" style="background:#7c3aed;color:#fff;">Developer</span>';
-    if (role === 'admin') return '<span class="badge badge-info">Admin</span>';
+    if (role === 'developer') return '<span class="badge" style="background:#7c3aed;color:#fff;">System Administrator</span>';
+    if (role === 'admin') return '<span class="badge badge-info">Administrator</span>';
     if (role === 'admin_aid') return '<span class="badge" style="background:#0ea5e9;color:#fff;">Admin Aid</span>';
     return '<span class="badge badge-neutral">Inspector</span>';
   };
@@ -552,6 +556,7 @@ function openUserFormModal(user, readOnly){
 /* ---------------------------- SETTINGS ---------------------------- */
 async function initSettingsPage(){
   const moduleList = $('#systemModuleList');
+  if (!moduleList) { initProfileSettingsPage(); return; }
 
   async function loadModules() {
     try {
@@ -639,6 +644,49 @@ async function loadAiSettings() {
 }
 
 /* ---------------------------- PROFILE ---------------------------- */
+async function initProfileSettingsPage(){
+  const fullName = document.body.getAttribute('data-full-name') || 'User';
+  const heroAvatar = $('#settingsHeroAvatar');
+  const photoWrap = $('#settingsPhotoWrap');
+  if (heroAvatar && photoWrap && !photoWrap.querySelector('img')) {
+    heroAvatar.textContent = initials(fullName);
+  }
+  initProfilePhotoUpload('settingsCamBtn', 'settingsPhotoInput', photoWrap, fullName);
+
+  $('#settingsProfileForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const data = Object.fromEntries(new FormData(e.target));
+      await apiPost('profile', 'update', data);
+      showToast({ title: 'Profile updated', message: 'Your changes have been saved.', type: 'success' });
+    } catch (err) {
+      showToast({ title: 'Error', message: 'Failed to update profile.', type: 'error' });
+    }
+  });
+
+  const np = $('#settingsNewPassword'), cp = $('#settingsConfirmPassword'), cur = $('#settingsCurrentPassword');
+  const toggle1 = $('#settingsPwToggle1'), toggle2 = $('#settingsPwToggle2');
+  if (toggle1) initPasswordToggle(toggle1, np);
+  if (toggle2) initPasswordToggle(toggle2, cp);
+
+  $('#settingsPasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearFieldError(np); clearFieldError(cp); clearFieldError(cur);
+    if (!cur || !cur.value){ if (cur) setFieldError(cur, 'Enter your current password.'); return; }
+    if (np.value.length < 6){ setFieldError(np, 'Minimum 6 characters.'); return; }
+    if (np.value !== cp.value){ setFieldError(cp, 'Passwords do not match.'); return; }
+    try {
+      const res = await apiPost('profile', 'change-password', { current_password: cur.value, new_password: np.value });
+      if (res && res.error) { showToast({ title: 'Error', message: res.error, type: 'error' }); return; }
+      showToast({ title: 'Password changed', message: 'Use your new password next time you sign in.', type: 'success' });
+      np.value = ''; cp.value = ''; cur.value = '';
+    } catch (err) {
+      showToast({ title: 'Error', message: 'Failed to change password.', type: 'error' });
+    }
+  });
+}
+
+/* ---------------------------- PROFILE ---------------------------- */
 async function initProfilePage(){
   const fullName = document.body.getAttribute('data-full-name') || 'Admin';
   const initialEl = $('#profileAvatarInitials');
@@ -660,15 +708,16 @@ async function initProfilePage(){
 
   $('#changePasswordForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const np = $('#newPassword'), cp = $('#confirmPassword');
-    clearFieldError(np); clearFieldError(cp);
+    const np = $('#newPassword'), cp = $('#confirmPassword'), cur = $('input[name="current_password"]');
+    clearFieldError(np); clearFieldError(cp); if (cur) clearFieldError(cur);
+    if (!cur || !cur.value){ if (cur) setFieldError(cur, 'Enter your current password.'); return; }
     if (np.value.length < 6){ setFieldError(np, 'Minimum 6 characters.'); return; }
     if (np.value !== cp.value){ setFieldError(cp, 'Passwords do not match.'); return; }
     try {
-      const data = { new_password: np.value };
-      await apiPost('profile', 'change-password', data);
+      const res = await apiPost('profile', 'change-password', { current_password: cur.value, new_password: np.value });
+      if (res && res.error) { showToast({ title: 'Error', message: res.error, type: 'error' }); return; }
       showToast({ title: 'Password changed', message: 'Use your new password next time you sign in.', type: 'success' });
-      np.value = ''; cp.value = '';
+      np.value = ''; cp.value = ''; cur.value = '';
     } catch (err) {
       showToast({ title: 'Error', message: 'Failed to change password.', type: 'error' });
     }

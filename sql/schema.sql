@@ -1,8 +1,16 @@
 -- ============================================================================
 -- PAMS — Full database schema (latest, consolidated)
 -- Database: pams_db  ·  Charset: utf8mb4 / utf8mb4_unicode_ci
--- This single file replaces all earlier incremental migration files.
--- Seed login: admin / admin123  ·  jdelacruz / user123
+-- This single file replaces all earlier incremental migration files
+-- (api_tokens, inspection-module, inspector-admin, team-leaders,
+--  workflow-no-last-out, permit-workflow-columns).
+--
+-- Seed accounts (passwords preserved from the live deployment):
+--   admin      / admin123        (developer)
+--   archillesdc                  (inspector)
+--   archillesdcc                 (developer)
+--   awayann                      (inspector-admin)
+--   archelldc                    (admin)
 -- ============================================================================
 
 CREATE DATABASE IF NOT EXISTS pams_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -20,6 +28,8 @@ CREATE TABLE users (
     profile_photo VARCHAR(255) DEFAULT 'assets/images/OBO LOGO.png',
     is_active TINYINT(1) DEFAULT 1,
     is_admin TINYINT(1) DEFAULT 0,
+    role VARCHAR(20) NOT NULL DEFAULT 'inspector',
+    position VARCHAR(100) DEFAULT NULL,
     last_login DATETIME DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -78,8 +88,13 @@ CREATE TABLE order_of_payments (
 CREATE TABLE permit_workflows (
     id INT AUTO_INCREMENT PRIMARY KEY,
     application_no VARCHAR(50) NOT NULL,
+    permit_no VARCHAR(50) DEFAULT NULL,
     applicant_name VARCHAR(150) NOT NULL,
     project_type VARCHAR(100) NOT NULL,
+    permit_type VARCHAR(100) DEFAULT NULL,
+    assessment_approval VARCHAR(255) DEFAULT NULL,
+    date_paid DATE DEFAULT NULL,
+    released DATE DEFAULT NULL,
     location VARCHAR(255) NOT NULL,
     current_stage VARCHAR(100) NOT NULL DEFAULT 'Initial Review',
     status ENUM('Pending','Under Review','Approved','Disapproved','Released') NOT NULL DEFAULT 'Pending',
@@ -103,6 +118,7 @@ CREATE TABLE workflow_rounds (
     round_number INT NOT NULL,
     last_in DATE DEFAULT NULL,
     last_out DATE DEFAULT NULL,
+    no_last_out TINYINT(1) NOT NULL DEFAULT 0,
     processing_days INT DEFAULT 0,
     remarks TEXT DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -278,12 +294,25 @@ CREATE TABLE inspection_schedules (
     CONSTRAINT inspection_schedules_ibfk_2 FOREIGN KEY (encoded_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE team_leaders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(150) NOT NULL,
+    position VARCHAR(150) DEFAULT NULL,
+    team_no TINYINT NOT NULL DEFAULT 1 COMMENT 'Assigned team: 1 or 2',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_tl_team (team_no),
+    KEY idx_tl_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE inspection_records (
     id INT AUTO_INCREMENT PRIMARY KEY,
     inspection_no VARCHAR(50) NOT NULL,
     schedule_id INT DEFAULT NULL,
     application_no VARCHAR(50) NOT NULL,
     permit_no VARCHAR(50) DEFAULT NULL,
+    permit_date_issued DATE DEFAULT NULL,
     project_title VARCHAR(255) NOT NULL,
     project_location VARCHAR(255) DEFAULT NULL,
     owner_representative VARCHAR(150) DEFAULT NULL,
@@ -305,6 +334,8 @@ CREATE TABLE inspection_records (
     status ENUM('Draft','Under Review','Approved','Completed','Rejected') NOT NULL DEFAULT 'Draft',
     inspector_id INT DEFAULT NULL,
     inspector_signature VARCHAR(255) DEFAULT NULL,
+    team_leader_1 INT DEFAULT NULL,
+    team_leader_2 INT DEFAULT NULL,
     reviewed_by INT DEFAULT NULL,
     review_signature VARCHAR(255) DEFAULT NULL,
     review_date DATETIME DEFAULT NULL,
@@ -324,7 +355,9 @@ CREATE TABLE inspection_records (
     CONSTRAINT inspection_records_ibfk_2 FOREIGN KEY (inspector_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT inspection_records_ibfk_3 FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT inspection_records_ibfk_4 FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT inspection_records_ibfk_5 FOREIGN KEY (encoded_by) REFERENCES users(id)
+    CONSTRAINT inspection_records_ibfk_5 FOREIGN KEY (encoded_by) REFERENCES users(id),
+    CONSTRAINT fk_inspection_team_leader_1 FOREIGN KEY (team_leader_1) REFERENCES team_leaders(id) ON DELETE SET NULL,
+    CONSTRAINT fk_inspection_team_leader_2 FOREIGN KEY (team_leader_2) REFERENCES team_leaders(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE inspection_template_items (
@@ -365,16 +398,30 @@ CREATE TABLE inspection_photos (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
--- DEFAULT SEED DATA
+-- MOBILE API TOKENS (token-based auth para sa React Native / Expo app)
 -- ---------------------------------------------------------------------------
-INSERT INTO users (full_name, username, email, password_hash, is_active, is_admin) VALUES
-('System Administrator', 'admin', 'admin@pams.gov.ph', '$2y$10$HqAong77QioVpSS0DGi/6ODJLHLnXb1qFpdY6vdOnNC0tT70YE9XG', 1, 1),
-('Juan R. Dela Cruz', 'jdelacruz', 'jdelacruz@pams.gov.ph', '$2y$10$DTYZhKquXSJgYRh1WQtvMuoawRPViZ2y3MO0orl5bwKHcwLBzbMki', 1, 0);
+CREATE TABLE api_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token CHAR(64) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NOT NULL,
+    last_used_at DATETIME DEFAULT NULL,
+    UNIQUE KEY uniq_token (token),
+    KEY idx_api_tokens_user (user_id),
+    CONSTRAINT api_tokens_ibfk_1 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO user_permissions (user_id, module_key, is_granted) VALUES
-(2, 'dashboard', 1),
-(2, 'inspection-checklist', 1),
-(2, 'inspection-reports', 1);
+-- ---------------------------------------------------------------------------
+-- DEFAULT SEED DATA  (live deployment accounts, ids preserved)
+-- ---------------------------------------------------------------------------
+INSERT INTO users (id, full_name, username, email, password_hash, is_active, is_admin, role, position) VALUES
+(1, 'Archilles Dela Cruz', 'archillesdc_', NULL, '$2y$10$371Tgk7t8n3At2DXXR4ZpuRluV3Uilx3UBMiU2ah5fZzWM52bfOS2', 1, 1, 'developer', NULL);
+-- user_permissions intentionally empty: developer has full access by role.
+
+INSERT INTO team_leaders (id, full_name, position, team_no, is_active) VALUES
+(1, 'Carlos Mendoza', 'Team Leader', 1, 1),
+(2, 'Rosa Villanueva', 'Team Leader', 2, 1);
 
 -- ---------------------------------------------------------------------------
 -- INSPECTION CHECKLIST TEMPLATE (standard OBO on-site ocular inspection items)

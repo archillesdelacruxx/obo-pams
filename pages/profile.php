@@ -1,6 +1,13 @@
 <?php
+require_once __DIR__ . '/../includes/auth.php';
+requireAuth();
+$isDev = ($_SESSION['role'] ?? '') === 'developer';
+if (!$isDev) {
+    requirePermission('settings');
+    header('Location: settings.php');
+    exit;
+}
 require_once __DIR__ . '/../includes/admin-shell.php';
-requireAdmin();
 
 $pdo = getDB();
 $stmt = $pdo->prepare('SELECT full_name, username, email, last_login, created_at, profile_photo FROM users WHERE id = ?');
@@ -10,24 +17,26 @@ $profile = $stmt->fetch();
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Profile Â· PAMS</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/variables.css">
-<link rel="stylesheet" href="../assets/css/utilities.css">
-<link rel="stylesheet" href="../assets/css/buttons.css">
-<link rel="stylesheet" href="../assets/css/layout.css?v=20260803b">
-<link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
-<link rel="stylesheet" href="../assets/css/header.css">
-<link rel="stylesheet" href="../assets/css/cards.css">
-<link rel="stylesheet" href="../assets/css/forms.css">
-<link rel="stylesheet" href="../assets/css/dashboard.css">
-<link rel="stylesheet" href="../assets/css/modal.css">
-<link rel="stylesheet" href="../assets/css/responsive.css">
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile · PAMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/utilities.css">
+  <link rel="stylesheet" href="../assets/css/buttons.css">
+  <link rel="stylesheet" href="../assets/css/layout.css?v=20260816c">
+  <link rel="stylesheet" href="../assets/css/sidebar.css?v=20260803b">
+  <link rel="stylesheet" href="../assets/css/header.css">
+  <link rel="stylesheet" href="../assets/css/cards.css">
+  <link rel="stylesheet" href="../assets/css/forms.css">
+  <link rel="stylesheet" href="../assets/css/modal.css">
+  <link rel="stylesheet" href="../assets/css/tables.css">
+  <link rel="stylesheet" href="../assets/css/responsive.css">
+  <link rel="stylesheet" href="../assets/css/dashboard.css">
 </head>
-<body data-page="profile" data-full-name="<?php echo escape($profile['full_name']); ?>" data-username="<?php echo escape($profile['username']); ?>" data-email="<?php echo escape($profile['email'] ?? ''); ?>" data-last-login="<?php echo escape($profile['last_login'] ?? ''); ?>" data-profile-photo="<?php echo escape($profile['profile_photo'] ?? ''); ?>">
+<body data-page="profile" data-full-name="<?php echo escape($_SESSION['full_name']); ?>" data-username="<?php echo escape($_SESSION['username']); ?>" data-email="<?php echo escape($_SESSION['email'] ?? ''); ?>" data-last-login="<?php echo escape($_SESSION['logged_in_at'] ?? ''); ?>" data-profile-photo="<?php echo escape($profile['profile_photo'] ?? ''); ?>">
 
   <div class="app-shell" id="appShell">
     <?php echo renderAdminSidebar('profile'); ?>
@@ -59,7 +68,7 @@ $profile = $stmt->fetch();
             </div>
             <div class="p-info">
               <h2><?php echo escape($profile['full_name'] ?? 'Administrator'); ?></h2>
-              <p>System Administrator</p>
+              <p><?php echo escape(roleDisplayName($_SESSION['role'] ?? 'inspector')); ?></p>
               <div class="flex gap-sm" style="margin-top:10px;">
                 <span class="badge badge-success">Active</span>
               </div>
@@ -133,4 +142,3 @@ $profile = $stmt->fetch();
   <script src="../assets/js/app.js?v=20260803d"></script>
 </body>
 </html>
-

@@ -7,6 +7,7 @@ $perms = getUserModulePermissions();
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>On-Site Ocular Inspection Checklist · PAMS User</title>
@@ -15,7 +16,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260816c">
   <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
@@ -112,18 +113,11 @@ $perms = getUserModulePermissions();
           <div class="section-head"><h3 id="inschReviewTitle">Review</h3></div>
           <div class="section-body">
             <div class="form-grid">
-              <div class="form-group full"><label>Review / Approval Remarks</label><textarea class="form-control" id="inschReviewRemarks" rows="2" placeholder="Remarks (leave blank to approve)"></textarea></div>
-            </div>
-            <div class="sig-wrap">
-              <canvas id="inschReviewCanvas" class="signature-pad" width="700" height="200"></canvas>
-              <div class="sig-actions">
-                <button type="button" class="btn btn-secondary btn-sm" id="inschReviewSigClear">Clear</button>
-                <span class="text-xs text-muted">Reviewer / Approver signature.</span>
-              </div>
+              <div class="form-group full" id="inschReviewRemarksWrap"><label>Rejection Remarks <span class="req">*</span></label><textarea class="form-control" id="inschReviewRemarks" rows="2" placeholder="Required when rejecting this inspection"></textarea></div>
             </div>
             <div class="flex gap-sm" style="margin-top:14px;">
-              <button type="button" class="btn btn-success" id="inschApproveBtn" style="display:none;">Approve &amp; Sign</button>
-              <button type="button" class="btn btn-danger" id="inschRejectBtn" style="display:none;">Reject &amp; Sign</button>
+              <button type="button" class="btn btn-success" id="inschApproveBtn" style="display:none;">Approve</button>
+              <button type="button" class="btn btn-danger" id="inschRejectBtn" style="display:none;">Reject</button>
             </div>
           </div>
         </div>

@@ -14,13 +14,14 @@ function getUserNavItems(): array {
         ['key' => 'releasing-records', 'label' => 'Releasing Records', 'page' => 'releasing-records.php', 'icon' => 'layers', 'section' => 'Modules'],
         ['key' => 'inspection-checklist', 'label' => 'Ocular Inspection Checklist', 'page' => 'inspection-checklist.php', 'icon' => 'clipboard', 'section' => 'Inspection Management'],
         ['key' => 'inspection-reports', 'label' => 'Monitoring Reports', 'page' => 'inspection-reports.php', 'icon' => 'activity', 'section' => 'Inspection Management'],
+        ['key' => 'inspection-review', 'label' => 'Inspection Review', 'page' => 'inspection-review.php', 'icon' => 'checkmark-done', 'section' => 'Inspection Management'],
+        ['key' => 'team-leaders', 'label' => 'Team Leaders', 'page' => 'team-leaders.php', 'icon' => 'users', 'section' => 'Inspection Management'],
         ['key' => 'announcements', 'label' => 'Announcements', 'page' => 'announcements.php', 'icon' => 'megaphone', 'section' => 'Account'],
-        ['key' => 'profile', 'label' => 'Profile', 'page' => 'profile.php', 'icon' => 'user', 'section' => 'Account'],
-        ['key' => 'settings', 'label' => 'Settings', 'page' => 'settings.php', 'icon' => 'settings', 'section' => 'Account'],
+        ['key' => 'settings', 'label' => 'Profile Settings', 'page' => 'settings.php', 'icon' => 'settings', 'section' => 'Account'],
     ];
 }
 
-function renderUserSidebar(string $activeKey): string {
+function renderUserSidebar(string $activeKey, string $dir = ''): string {
     $items = getUserNavItems();
     $role = $_SESSION['role'] ?? 'inspector';
     $isAdmin = !empty($_SESSION['is_admin']) && $role !== 'admin_aid';
@@ -36,7 +37,7 @@ function renderUserSidebar(string $activeKey): string {
         }
     }
 
-    $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'profile', 'settings'];
+    $alwaysVisible = ['dashboard', 'notifications', 'announcements', 'settings'];
 
     // Load module availability statuses
     $moduleStatuses = [];
@@ -69,7 +70,10 @@ function renderUserSidebar(string $activeKey): string {
             $granted = $navAllowed($item['key']);
             $isUnderDev = ($moduleStatuses[$item['key']] ?? 'active') === 'under_development';
             $icon = getNavIcon($item['icon']);
-            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($item['page']) . '" data-module-key="' . escape($item['key']) . '"' . ($isUnderDev ? ' data-under-dev="1"' : '') . ' href="' . escape($item['page']) . '" tabindex="0" aria-label="' . escape($item['label']) . '"' . ($granted ? '' : ' hidden') . '>'
+            $linkPage = in_array($item['key'], ['profile', 'settings'], true)
+                ? (($dir === '' ? '../' : '') . $item['page'])
+                : ($dir . $item['page']);
+            $navHtml .= '<a class="nav-item' . $active . '" data-user-nav="' . escape($linkPage) . '" data-module-key="' . escape($item['key']) . '"' . ($isUnderDev ? ' data-under-dev="1"' : '') . ' href="' . escape($linkPage) . '" tabindex="0" aria-label="' . escape($item['label']) . '"' . ($granted ? '' : ' hidden') . '>'
                 . $icon
                 . '<span class="label">' . escape($item['label']) . '</span>'
                 . ($isUnderDev ? '<span class="badge" style="font-size:9px;background:var(--warning,#eab308);color:#000;margin-left:auto;padding:1px 5px;border-radius:4px;">Dev</span>' : '')
@@ -78,7 +82,16 @@ function renderUserSidebar(string $activeKey): string {
         }
     }
 
-    $basePath = '../../';
+    if (($_SESSION['role'] ?? '') === 'inspector-admin') {
+        $umHref = ($dir === '' ? '../' : '') . 'user-management.php';
+        $umActive = $activeKey === 'user-management' ? ' active' : '';
+        $navHtml .= '<div class="sidebar-section-label">Administration</div>'
+            . '<a class="nav-item' . $umActive . '" data-user-nav="' . escape($umHref) . '" href="' . escape($umHref) . '" tabindex="0" aria-label="User Management">'
+            . getNavIcon('users')
+            . '<span class="label">User Management</span></a>';
+    }
+
+    $basePath = ($dir === '' ? '../../' : '../');
     $name = escape($_SESSION['full_name'] ?? 'User');
     $initials = implode('', array_map(fn($n) => strtoupper($n[0]), explode(' ', $name)));
     $initials = substr($initials, 0, 2);
@@ -99,15 +112,15 @@ function renderUserSidebar(string $activeKey): string {
                 <div class="avatar sm">' . $avatarHtml . '</div>
                 <div class="info">
                     <strong>' . escape($name) . '</strong>
-                    <span>' . ($_SESSION['role'] === 'admin_aid' ? 'Admin Aid' : ($_SESSION['role'] === 'admin' ? 'Administrator' : ($_SESSION['role'] === 'developer' ? 'Developer' : 'Inspector'))) . '</span>
+                    <span>' . escape(roleDisplayName($_SESSION['role'] ?? 'inspector')) . '</span>
                 </div>
             </div>
         </div>
     </aside>';
 }
 
-function renderUserHeader(string $pageTitle): string {
-    $basePath = '../../';
+function renderUserHeader(string $pageTitle, string $dir = ''): string {
+    $basePath = ($dir === '' ? '../../' : '../');
     $name = escape($_SESSION['full_name'] ?? 'User');
     $first = explode(' ', $name)[0];
     $last = substr(strrchr($name, ' '), 1) ?: $first;
@@ -146,10 +159,9 @@ function renderUserHeader(string $pageTitle): string {
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </div>
                 <div class="dropdown-panel profile-menu" id="profilePanel">
-                    <div class="profile-menu-item" data-user-nav="profile.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My Profile</div>
-                    <div class="profile-menu-item" data-user-nav="settings.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</div>
+                    <div class="profile-menu-item" data-user-nav="' . escape($dir === '' ? '../' : '') . 'settings.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Profile Settings</div>
                     <hr class="divider" style="margin:6px 0;">
-                    <a class="profile-menu-item danger" id="userLogoutTrigger" href="../../logout.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg> Logout</a>
+                    <a class="profile-menu-item danger" id="userLogoutTrigger" href="' . escape($basePath) . 'logout.php"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg> Logout</a>
                 </div>
             </div>
         </div>

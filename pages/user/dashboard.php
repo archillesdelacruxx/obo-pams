@@ -5,13 +5,38 @@ requirePermission('dashboard');
 $greeting = date('H') < 12 ? 'Good morning' : (date('H') < 17 ? 'Good afternoon' : 'Good evening');
 $firstName = explode(' ', $_SESSION['full_name'])[0];
 $perms = getUserModulePermissions();
-$hasOP = !empty($perms['order-of-payment']);
-$hasWorkflow = !empty($perms['permit-workflow']);
-$hasReleasing = !empty($perms['releasing']);
-$hasApproval = !empty($perms['permit-approval-encoding']) || !empty($perms['permit-approval-records']);
+$pdo = getDB();
+$moduleStatuses = [];
+try {
+    $statusStmt = $pdo->prepare("SELECT setting_key, setting_value FROM system_settings WHERE setting_key LIKE 'module_%'");
+    $statusStmt->execute();
+    while ($sr = $statusStmt->fetch()) {
+        $moduleStatuses[str_replace('module_', '', $sr['setting_key'])] = $sr['setting_value'];
+    }
+} catch (Exception $e) { /* ignore */ }
+$moduleActive = fn(string $key): bool => ($moduleStatuses[$key] ?? 'active') !== 'under_development';
+$grantedKeys = array_keys(array_filter($perms));
+$activePermKeys = array_values(array_filter($grantedKeys, fn($k) => $moduleActive($k)));
+
+$quickCards = [
+    'order-of-payment' => ['page' => 'order-of-payment.php', 'icon' => 'file-text', 'title' => 'Order of Payment', 'desc' => 'Encode new OP records', 'color' => 'blue'],
+    'op-records' => ['page' => 'op-records.php', 'icon' => 'layers', 'title' => 'OP Records', 'desc' => 'View OP records', 'color' => 'green'],
+    'permit-workflow' => ['page' => 'permit-workflow.php', 'icon' => 'git-branch', 'title' => 'Permit Workflow', 'desc' => 'Track permit processing', 'color' => 'blue'],
+    'workflow-details' => ['page' => 'workflow-details.php', 'icon' => 'git-branch', 'title' => 'Workflow Details', 'desc' => 'View workflow records', 'color' => 'gray'],
+    'permit-approval-encoding' => ['page' => 'permit-approval-encoding.php', 'icon' => 'award', 'title' => 'Permit Approval', 'desc' => 'Encode approvals', 'color' => 'orange'],
+    'permit-approval-records' => ['page' => 'permit-approval-records.php', 'icon' => 'layers', 'title' => 'Approval Records', 'desc' => 'View approval records', 'color' => 'green'],
+    'releasing' => ['page' => 'releasing.php', 'icon' => 'package', 'title' => 'Releasing Plans', 'desc' => 'Encode folder releases', 'color' => 'orange'],
+    'releasing-records' => ['page' => 'releasing-records.php', 'icon' => 'layers', 'title' => 'Releasing Records', 'desc' => 'View released folders', 'color' => 'gray'],
+    'inspection-checklist' => ['page' => 'inspection-checklist.php', 'icon' => 'clipboard', 'title' => 'Ocular Inspection', 'desc' => 'Record on-site checklists', 'color' => 'blue'],
+    'inspection-reports' => ['page' => 'inspection-reports.php', 'icon' => 'activity', 'title' => 'Monitoring Reports', 'desc' => 'View inspection reports', 'color' => 'green'],
+    'inspection-review' => ['page' => 'inspection-review.php', 'icon' => 'checkmark-done', 'title' => 'Inspection Review', 'desc' => 'Approve/reject submitted records', 'color' => 'orange'],
+    'team-leaders' => ['page' => 'team-leaders.php', 'icon' => 'users', 'title' => 'Team Leaders', 'desc' => 'Manage inspection teams', 'color' => 'gray'],
+];
+$visibleCards = array_filter($quickCards, fn($card, $key) => !empty($perms[$key]) && $moduleActive($key), ARRAY_FILTER_USE_BOTH);
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="csrf-token" content="<?php echo escape(generateCSRFToken()); ?>">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard Â· PAMS User</title>
@@ -20,7 +45,7 @@ $hasApproval = !empty($perms['permit-approval-encoding']) || !empty($perms['perm
   <link rel="stylesheet" href="../../assets/css/variables.css">
   <link rel="stylesheet" href="../../assets/css/utilities.css">
   <link rel="stylesheet" href="../../assets/css/buttons.css">
-  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260803b">
+  <link rel="stylesheet" href="../../assets/css/layout.css?v=20260816c">
   <link rel="stylesheet" href="../../assets/css/sidebar.css?v=20260803b">
   <link rel="stylesheet" href="../../assets/css/header.css">
   <link rel="stylesheet" href="../../assets/css/cards.css">
@@ -31,7 +56,7 @@ $hasApproval = !empty($perms['permit-approval-encoding']) || !empty($perms['perm
   <link rel="stylesheet" href="../../assets/css/responsive.css">
   <link rel="stylesheet" href="../../assets/css/user.css?v=20260812c">
 </head>
-<body data-page="user-dashboard" data-first-name="<?php echo escape(explode(' ', $_SESSION['full_name'])[0]); ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
+<body data-page="user-dashboard" data-first-name="<?php echo escape(explode(' ', $_SESSION['full_name'])[0]); ?>" data-permissions='<?php echo json_encode($activePermKeys); ?>'>
   <div class="app-shell" id="appShell">
     <?php echo renderUserSidebar('dashboard'); ?>
     <div class="main-col">
@@ -57,29 +82,19 @@ $hasApproval = !empty($perms['permit-approval-encoding']) || !empty($perms['perm
           <div>
             <h3 style="font-size:14px;font-weight:700;color:var(--gray-700);margin-bottom:12px;">Quick Access</h3>
             <div class="quick-access-grid">
-              <?php if ($hasOP): ?>
-              <a href="order-of-payment.php" class="quick-card" data-user-nav="order-of-payment.php">
-                <div class="qc-icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-                <div class="qc-body"><strong>Order of Payment</strong><span>Encode new OP records</span></div>
+              <?php if (empty($visibleCards)): ?>
+              <p style="grid-column:1 / -1;padding:14px;color:var(--gray-400);font-size:13px;">No modules are enabled for your account yet.</p>
+              <?php else: ?>
+              <?php foreach ($visibleCards as $key => $card): ?>
+              <a href="<?php echo $card['page']; ?>" class="quick-card" data-user-nav="<?php echo $card['page']; ?>">
+                <div class="qc-icon icon-<?php echo $card['color']; ?>"><?php echo getNavIcon($card['icon']); ?></div>
+                <div class="qc-body"><strong><?php echo escape($card['title']); ?></strong><span><?php echo escape($card['desc']); ?></span></div>
                 <div class="qc-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
               </a>
-              <?php endif; ?>
-              <?php if ($hasWorkflow): ?>
-              <a href="permit-workflow.php" class="quick-card" data-user-nav="permit-workflow.php">
-                <div class="qc-icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></div>
-                <div class="qc-body"><strong>Permit Workflow</strong><span>Track permit processing</span></div>
-                <div class="qc-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-              </a>
-              <?php endif; ?>
-              <?php if ($hasReleasing): ?>
-              <a href="releasing.php" class="quick-card" data-user-nav="releasing.php">
-                <div class="qc-icon icon-orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
-                <div class="qc-body"><strong>Releasing Plans</strong><span>Encode folder releases</span></div>
-                <div class="qc-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-              </a>
+              <?php endforeach; ?>
               <?php endif; ?>
               <a href="announcements.php" class="quick-card" data-user-nav="announcements.php">
-                <div class="qc-icon icon-gray"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg></div>
+                <div class="qc-icon icon-gray"><?php echo getNavIcon('megaphone'); ?></div>
                 <div class="qc-body"><strong>Announcements</strong><span>View admin announcements</span></div>
                 <div class="qc-arrow"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
               </a>
