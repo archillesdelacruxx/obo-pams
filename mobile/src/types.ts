@@ -128,7 +128,6 @@ export interface InspectionRecordDetail extends InspectionRecord {
   recommendations: string | null;
   completion_percentage: number | null;
   inspector_id: number;
-  inspector_signature: string | null;
   team_leader_1: number | null;
   team_leader_1_name?: string | null;
   team_leader_1_position?: string | null;
@@ -179,7 +178,6 @@ export interface ChecklistPayload {
   overall_findings?: string;
   recommendations?: string;
   completion_percentage?: number | null;
-  inspector_signature?: string;
   team_leader_1?: number | null;
   team_leader_2?: number | null;
   results: ChecklistResultItem[];

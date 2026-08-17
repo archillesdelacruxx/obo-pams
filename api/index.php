@@ -101,19 +101,6 @@ function getAiApiKey(PDO $pdo): string {
     return $val;
 }
 
-/* Save a base64 data-URL image (signature) into the given uploads subfolder. */
-function inspectionSaveSignature(string $dataUrl, string $subdir): string {
-    if (!preg_match('#^data:image/(png|jpeg);base64,#i', $dataUrl, $m)) return '';
-    $ext = strtolower($m[1]) === 'png' ? 'png' : 'jpg';
-    $dir = __DIR__ . "/../uploads/$subdir/";
-    if (!is_dir($dir)) mkdir($dir, 0775, true);
-    $name = $subdir . '_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-    $bin = base64_decode(substr($dataUrl, strpos($dataUrl, ',') + 1));
-    if ($bin === false || $bin === '') return '';
-    file_put_contents($dir . $name, $bin);
-    return "uploads/$subdir/$name";
-}
-
 /* Generate the next sequential inspection number: INS-YYYY-#### */
 function nextInspectionNo(PDO $pdo): string {
     $prefix = 'INS-' . date('Y') . '-';
@@ -776,7 +763,6 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $completionPercentage = ($data['completion_percentage'] ?? '') !== '' ? (float)$data['completion_percentage'] : null;
             $scheduleId = !empty($data['schedule_id']) ? (int)$data['schedule_id'] : null;
             $results = is_array($data['results'] ?? null) ? $data['results'] : [];
-            $newSignature = trim($data['inspector_signature'] ?? '');
             $teamLeader1 = !empty($data['team_leader_1']) ? (int)$data['team_leader_1'] : null;
             $teamLeader2 = !empty($data['team_leader_2']) ? (int)$data['team_leader_2'] : null;
 
@@ -805,21 +791,18 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 }
             }
 
-            $signaturePath = $existing['inspector_signature'] ?? null;
-            if ($newSignature) $signaturePath = inspectionSaveSignature($newSignature, 'inspection_signatures');
-
             if ($action === 'checklist/create') {
                 $inspectionNo = nextInspectionNo($pdo);
                 if (!$applicationNo) $applicationNo = 'APP-' . $inspectionNo;
-                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, inspector_signature, team_leader_1, team_leader_2, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $signaturePath, $teamLeader1, $teamLeader2, $_SESSION['user_id']]);
+                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, team_leader_1, team_leader_2, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $teamLeader1, $teamLeader2, $_SESSION['user_id']]);
                 $id = (int)$pdo->lastInsertId();
                 logActivity($_SESSION['user_id'], 'inspection_checklist_created', "Created inspection $inspectionNo ($projectTitle)");
             } else {
                 $inspectionNo = $existing['inspection_no'];
                 if (!$applicationNo) $applicationNo = $existing['application_no'];
-                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, inspector_signature=?, team_leader_1=?, team_leader_2=? WHERE id=?')
-                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $signaturePath, $teamLeader1, $teamLeader2, $id]);
+                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, team_leader_1=?, team_leader_2=? WHERE id=?')
+                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $teamLeader1, $teamLeader2, $id]);
                 logActivity($_SESSION['user_id'], 'inspection_checklist_updated', "Updated inspection ID $id");
             }
 
@@ -984,9 +967,7 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
             $id = (int)($data['id'] ?? 0);
             if (!$id) jsonResponse(['error' => 'ID required.'], 422);
-            $signature = trim($data['signature'] ?? '');
             $remarks = trim($data['remarks'] ?? '');
-            $path = $signature ? inspectionSaveSignature($signature, 'inspection_signatures') : null;
 
             $stmt = $pdo->prepare('SELECT inspection_no, status FROM inspection_records WHERE id = ?');
             $stmt->execute([$id]);
@@ -995,15 +976,15 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
 
             if ($action === 'checklist/review') {
                 if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Record must be Under Review before reviewing.'], 422);
-                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
-                    ->execute([$_SESSION['user_id'], $path, $remarks, $remarks ? 'Rejected' : 'Approved', $id]);
+                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
+                    ->execute([$_SESSION['user_id'], $remarks, $remarks ? 'Rejected' : 'Approved', $id]);
                 $newStatus = $remarks ? 'Rejected' : 'Approved';
                 logActivity($_SESSION['user_id'], 'inspection_reviewed', "Reviewed inspection {$rec['inspection_no']} as $newStatus");
                 jsonResponse(['success' => true, 'status' => $newStatus, 'message' => "Inspection $newStatus."]);
             } else {
                 if ($rec['status'] !== 'Under Review') jsonResponse(['error' => 'Only Under Review records can be rejected.'], 422);
-                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_signature=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
-                    ->execute([$_SESSION['user_id'], $path, $remarks, 'Rejected', $id]);
+                $pdo->prepare('UPDATE inspection_records SET reviewed_by=?, review_date=NOW(), review_remarks=?, status=? WHERE id=?')
+                    ->execute([$_SESSION['user_id'], $remarks, 'Rejected', $id]);
                 logActivity($_SESSION['user_id'], 'inspection_rejected', "Rejected inspection {$rec['inspection_no']}");
                 jsonResponse(['success' => true, 'status' => 'Rejected', 'message' => 'Inspection rejected.']);
             }

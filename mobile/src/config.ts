@@ -15,6 +15,6 @@ const DEV_HOST = getDevHost();
 const SERVER_HOST = DEV_HOST ?? '192.168.1.100';
 
 export const API_HOST = SERVER_HOST;
-export const API_BASE_URL = `http://${API_HOST}/obo-pams`;
+export const API_BASE_URL = `http://${API_HOST}/PAMS`;
 
 export const APP_VERSION = '1.0.0';

@@ -2038,44 +2038,6 @@ body[data-page="order-of-payment"] .form-card .section-body {
 }
 
 /* --------------------------------------------------------------------------
-   Inspection module — signature pad
-   -------------------------------------------------------------------------- */
-.sig-wrap {
-  max-width: 640px;
-}
-
-.signature-pad {
-  width: 100%;
-  height: 200px;
-  border: 1.5px dashed var(--gray-300);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  touch-action: none;
-  cursor: crosshair;
-}
-
-.sig-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.sig-saved {
-  margin-top: 10px;
-}
-
-.sig-img {
-  display: block;
-  max-height: 70px;
-  max-width: 260px;
-  background: #fff;
-  border: 1px solid var(--gray-200);
-  border-radius: var(--radius-xs);
-  padding: 4px;
-}
-
-/* --------------------------------------------------------------------------
    Inspection module — site photos
    -------------------------------------------------------------------------- */
 .photo-drop {
@@ -2258,38 +2220,6 @@ body[data-page="order-of-payment"] .form-card .section-body {
   color: var(--gray-600);
   width: 140px;
   white-space: nowrap;
-}
-
-.report-signatures {
-  display: flex;
-  gap: 24px;
-  justify-content: space-between;
-  margin-top: 8px;
-}
-
-.report-sig {
-  flex: 1;
-  text-align: center;
-  min-width: 0;
-}
-
-.report-sig-line {
-  height: 52px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  border-bottom: 1px solid var(--gray-800);
-  margin-bottom: 6px;
-}
-
-.report-sig-name {
-  font-weight: 700;
-  font-size: 12px;
-}
-
-.report-sig-label {
-  font-size: 12px;
-  color: var(--gray-500);
 }
 
 .report-photos {
@@ -2524,63 +2454,6 @@ body[data-page="order-of-payment"] .form-card .section-body {
   overflow-wrap: break-word;
 }
 
-/* ---- Signatures ---- */
-.mr-signatures {
-  font-family: Arial, Helvetica, sans-serif;
-  margin-top: 1px;
-}
-
-.mr-sig-box {
-  border: 1px solid #000;
-  padding: 1px 4px;
-  margin-bottom: 2px;
-  position: relative;
-}
-
-.mr-sig-label {
-  font-weight: 900;
-  font-size: 7.5pt;
-  text-transform: uppercase;
-  text-align: left;
-}
-
-.mr-sig-row {
-  display: flex;
-  gap: 0;
-}
-
-.mr-sig-divider {
-  display: none;
-}
-
-.mr-sig-person {
-  flex: 1;
-  text-align: center;
-  padding: 1px 2px;
-}
-
-.mr-sig-name {
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8pt;
-}
-
-.mr-sig-name .sig-img {
-  max-height: 14px;
-  max-width: 100%;
-}
-
-.mr-sig-line {
-  font-size: 6.5pt;
-  color: #555;
-  height: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* --------------------------------------------------------------------------
    Shared report container base
    -------------------------------------------------------------------------- */
@@ -2624,7 +2497,6 @@ body[data-page="order-of-payment"] .form-card .section-body {
   .btn,
   .icon-btn,
   .photo-drop,
-  .sig-actions,
   .table-footer .pagination,
   .row-actions {
     display: none !important;

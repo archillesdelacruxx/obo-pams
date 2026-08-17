@@ -22,7 +22,7 @@ SET @col_exists = (
     WHERE TABLE_SCHEMA = 'pams_db' AND TABLE_NAME = 'inspection_records' AND COLUMN_NAME = 'team_leader_1'
 );
 SET @ddl = IF(@col_exists = 0,
-    'ALTER TABLE inspection_records ADD COLUMN team_leader_1 INT DEFAULT NULL AFTER inspector_signature',
+    'ALTER TABLE inspection_records ADD COLUMN team_leader_1 INT DEFAULT NULL AFTER inspector_id',
     'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

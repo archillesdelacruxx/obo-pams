@@ -285,18 +285,15 @@ export async function submitRecord(id: number): Promise<void> {
 export async function reviewRecord(
   id: number,
   action: 'review' | 'reject',
-  signature: string,
   remarks: string,
   actor: string,
 ): Promise<string> {
   const db = await getDb();
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  const sig = signature || null;
   if (action === 'reject') {
     await db.runAsync(
-      `UPDATE inspection_records SET status = 'Rejected', reviewed_by = ?, review_signature = ?, review_date = ?, review_remarks = ?, review_pending = 1, sync_status = 'pending', synced_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?`,
+      `UPDATE inspection_records SET status = 'Rejected', reviewed_by = ?, review_date = ?, review_remarks = ?, review_pending = 1, sync_status = 'pending', synced_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?`,
       actor,
-      sig,
       now,
       remarks,
       id,
@@ -304,9 +301,8 @@ export async function reviewRecord(
     return 'Rejected';
   }
   await db.runAsync(
-    `UPDATE inspection_records SET status = 'Approved', reviewed_by = ?, review_signature = ?, review_date = ?, review_remarks = ?, review_pending = 1, sync_status = 'pending', synced_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?`,
+    `UPDATE inspection_records SET status = 'Approved', reviewed_by = ?, review_date = ?, review_remarks = ?, review_pending = 1, sync_status = 'pending', synced_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?`,
     actor,
-    sig,
     now,
     remarks,
     id,

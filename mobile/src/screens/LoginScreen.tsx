@@ -51,7 +51,7 @@ export default function LoginScreen() {
     if (!username.trim()) fe.username = 'Enter your username.';
     else if (username.trim().length < 3) fe.username = 'Username is too short.';
     if (!password) fe.password = 'Enter your password.';
-    else if (password.length < 6) fe.password = 'Password must be at least 6 characters.';
+    else if (password.length < 5) fe.password = 'Password must be at least 5 characters.';
     setFieldError(fe);
     if (fe.username || fe.password) {
       setError(null);

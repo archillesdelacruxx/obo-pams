@@ -19,6 +19,12 @@ const USER_NAV_ITEMS = [
   { key: 'releasing-records',        label: 'Releasing Records',        page: 'releasing-records.php',             icon: 'layers',       section: 'Modules' },
   { key: 'inspection-checklist',     label: 'Ocular Inspection Checklist', page: 'inspection-checklist.php',      icon: 'clipboard',    section: 'Inspection Management' },
   { key: 'inspection-reports',       label: 'Monitoring Reports',       page: 'inspection-reports.php',            icon: 'activity',     section: 'Inspection Management' },
+  { key: 'inspection-review',        label: 'Inspection Review',        page: 'inspection-review.php',             icon: 'checkmark-done', section: 'Inspection Management' },
+  { key: 'team-leaders',             label: 'Team Leaders',             page: 'team-leaders.php',                  icon: 'users',        section: 'Inspection Management' },
+  { key: 'activity-logs',            label: 'Activity Logs',            page: 'activity-logs.php',                 icon: 'activity',     section: 'Administration' },
+  { key: 'reports',                  label: 'Reports',                  page: 'reports.php',                       icon: 'bar-chart',    section: 'Administration' },
+  { key: 'user-management',          label: 'User Management',          page: 'user-management.php',               icon: 'users',        section: 'Administration' },
+  { key: 'module-access',            label: 'Module Access',            page: 'module-access.php',                 icon: 'layers',       section: 'Administration' },
   { key: 'announcements',            label: 'Announcements',            page: 'announcements.php',                 icon: 'megaphone',    section: 'Account' },
   { key: 'settings',                 label: 'Profile Settings',        page: 'settings.php',                      icon: 'settings',     section: 'Account' }
 ];

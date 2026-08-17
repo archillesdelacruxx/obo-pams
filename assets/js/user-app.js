@@ -1767,58 +1767,6 @@ function startInspection(id) {
 }
 
 /* --------------------------------------------------------------------------
-   Signature pad helper (mouse / touch / stylus)
-   -------------------------------------------------------------------------- */
-function initSignaturePad(canvasEl) {
-  if (!canvasEl) return null;
-  const ctx = canvasEl.getContext('2d');
-  ctx.lineWidth = 2.2;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#1f2937';
-  let drawing = false;
-
-  function point(e) {
-    const r = canvasEl.getBoundingClientRect();
-    const p = e.touches && e.touches[0] ? e.touches[0] : e;
-    return {
-      x: (p.clientX - r.left) * (canvasEl.width / r.width),
-      y: (p.clientY - r.top) * (canvasEl.height / r.height)
-    };
-  }
-
-  canvasEl.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    drawing = true;
-    canvasEl.setPointerCapture(e.pointerId);
-    const p = point(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  });
-  canvasEl.addEventListener('pointermove', (e) => {
-    if (!drawing) return;
-    e.preventDefault();
-    const p = point(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  });
-  const stop = () => { drawing = false; };
-  canvasEl.addEventListener('pointerup', stop);
-  canvasEl.addEventListener('pointercancel', stop);
-  canvasEl.addEventListener('pointerleave', stop);
-
-  return {
-    clear() { ctx.clearRect(0, 0, canvasEl.width, canvasEl.height); },
-    isEmpty() {
-      const d = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height).data;
-      for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
-      return true;
-    },
-    toDataURL() { return canvasEl.toDataURL('image/png'); }
-  };
-}
-
-/* --------------------------------------------------------------------------
    Inline modal helpers (for report / detail modals declared in page markup)
    -------------------------------------------------------------------------- */
 function bindInlineModal(modalId) {
@@ -1897,21 +1845,6 @@ function renderChecklistResultTable(results, editable, opts) {
     }).join(''),
     summary: `${results.length} item${results.length === 1 ? '' : 's'} · <b>${pass}</b> Pass, <b>${fail}</b> Fail, <b>${na}</b> N/A`
   };
-}
-
-function renderSignatureCell(rec, field) {
-  const map = {
-    inspector:  { sig: rec.inspector_signature,  name: rec.inspector_name,  date: rec.inspection_date,  label: 'Inspector' },
-    reviewer:   { sig: rec.review_signature,     name: rec.reviewed_by_name, date: rec.review_date,      label: 'Reviewed By' },
-    approver:   { sig: rec.approval_signature,   name: rec.approved_by_name, date: rec.approval_date,    label: 'Approved By' }
-  };
-  const m = map[field];
-  if (!m) return '';
-  return `<div class="report-sig">
-    <div class="report-sig-line">${m.sig ? `<img class="sig-img" src="${imgPath(m.sig)}" alt="signature">` : '&nbsp;'}</div>
-    <div class="report-sig-name">${escapeHtml(m.name || '—')}</div>
-    <div class="report-sig-label">${m.label}${m.date ? ` · ${formatDate(m.date)}` : ''}</div>
-  </div>`;
 }
 
 function renderReportDoc(rec) {
@@ -2018,40 +1951,6 @@ function renderReportDoc(rec) {
         </table>
       </div>
 
-      <div class="mr-signatures">
-        <div class="mr-sig-box">
-          <div class="mr-sig-label">INSPECTED BY:</div>
-          <div class="mr-sig-row">
-            <div class="mr-sig-person">
-              <div class="mr-sig-name">${escapeHtml(rec.team_leader_1_name || '')}</div>
-              <div class="mr-sig-line">Team Leader 1</div>
-              <div class="mr-sig-line">${escapeHtml(rec.team_leader_1_position || '&nbsp;')}</div>
-            </div>
-            <div class="mr-sig-divider"></div>
-            <div class="mr-sig-person">
-              <div class="mr-sig-name">${escapeHtml(rec.team_leader_2_name || '')}</div>
-              <div class="mr-sig-line">Team Leader 2</div>
-              <div class="mr-sig-line">${escapeHtml(rec.team_leader_2_position || '&nbsp;')}</div>
-            </div>
-          </div>
-        </div>
-        <div class="mr-sig-box">
-          <div class="mr-sig-label">REVIEWED &amp; NOTED BY:</div>
-          <div class="mr-sig-row">
-            <div class="mr-sig-person">
-              <div class="mr-sig-name">${rec.review_signature ? `<img class="sig-img" src="${imgPath(rec.review_signature)}" alt="signature">` : escapeHtml(rec.reviewed_by_name || '')}</div>
-              <div class="mr-sig-line">Name</div>
-              <div class="mr-sig-line">Position</div>
-            </div>
-            <div class="mr-sig-divider"></div>
-            <div class="mr-sig-person">
-              <div class="mr-sig-name"></div>
-              <div class="mr-sig-line">Name</div>
-              <div class="mr-sig-line">Position</div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   `;
 }

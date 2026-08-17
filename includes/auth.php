@@ -59,6 +59,7 @@ function authenticate(string $username, string $password): array {
     $_SESSION['is_admin'] = (bool)$user['is_admin'];
     $_SESSION['role'] = $user['role'] ?? 'inspector';
     $_SESSION['permissions'] = $permissions;
+    $_SESSION['position'] = $user['position'] ?? '';
     $_SESSION['logged_in_at'] = time();
 
     $pdo->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([$user['id']]);

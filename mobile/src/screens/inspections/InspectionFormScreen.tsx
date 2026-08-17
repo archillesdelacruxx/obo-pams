@@ -148,7 +148,7 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
             const ok = await form.submit();
             if (ok) {
               Alert.alert('Submitted', 'The inspection has been submitted for review.');
-              navigation.popToTop();
+              navigation.navigate('InspectionsList');
             }
           } catch {
             Alert.alert('Error', 'Could not submit. Please try again.');
