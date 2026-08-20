@@ -1,5 +1,5 @@
 import { File, UploadType } from 'expo-file-system';
-import { API_BASE_URL } from '../config';
+import { getApiBaseUrl } from '../config';
 import { apiFetch, getAuthToken } from './client';
 
 export const apiProfileUpdate = (fullName: string, email: string) =>
@@ -15,7 +15,7 @@ export async function apiProfileUploadPhoto(asset: {
 }): Promise<{ success: boolean; path: string }> {
   const file = new File(asset.uri);
   const token = getAuthToken();
-  const upload = file.createUploadTask(`${API_BASE_URL}/api/index.php?module=profile&action=upload-photo`, {
+  const upload = file.createUploadTask(`${getApiBaseUrl()}/api/index.php?module=profile&action=upload-photo`, {
     headers: {
       Accept: 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

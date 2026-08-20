@@ -25,7 +25,6 @@ const RECORD_SELECT = `
 `;
 
 const RECORD_COLUMNS = [
-  'inspection_no',
   'application_no',
   'permit_no',
   'permit_date_issued',
@@ -49,6 +48,7 @@ const RECORD_COLUMNS = [
   'completion_percentage',
   'team_leader_1',
   'team_leader_2',
+  'date_reinspected',
 ] as const;
 
 function recordValues(payload: ChecklistPayload): (string | number | null)[] {
@@ -76,6 +76,7 @@ function recordValues(payload: ChecklistPayload): (string | number | null)[] {
     payload.completion_percentage ?? null,
     payload.team_leader_1 ?? null,
     payload.team_leader_2 ?? null,
+    payload.date_reinspected ?? null,
   ];
 }
 
@@ -203,6 +204,7 @@ export async function getRecord(id: number): Promise<InspectionRecordDetail | nu
     { template_item_id: number; category: string; item_text: string; item_type: string; result: ItemResult; remarks: string }
   >('SELECT template_item_id, category, item_text, item_type, result, remarks FROM inspection_results WHERE record_id = ? ORDER BY id', id);
   const photos = await db.getAllAsync<InspectionPhoto>('SELECT id, file_path, caption FROM inspection_photos WHERE record_id = ? ORDER BY id', id);
+  console.log('[getRecord] id=', id, 'photos_found=', photos.length, 'photos=', JSON.stringify(photos));
   return {
     ...row,
     schedule_id: null,
@@ -229,8 +231,8 @@ export async function createRecord(
   let recordId = 0;
   await db.withExclusiveTransactionAsync(async (txn) => {
     const res = await txn.runAsync(
-      `INSERT INTO inspection_records (${RECORD_COLUMNS.join(', ')}, status, inspector_id, inspector_name) VALUES (${RECORD_COLUMNS.map(() => '?').join(', ')}, 'Draft', ?, ?)`,
-      [...values, ctx.inspectorId, ctx.inspectorName],
+      `INSERT INTO inspection_records (inspection_no, ${RECORD_COLUMNS.join(', ')}, status, inspector_id, inspector_name) VALUES (?, ${RECORD_COLUMNS.map(() => '?').join(', ')}, 'Draft', ?, ?)`,
+      [inspectionNo, ...values, ctx.inspectorId, ctx.inspectorName],
     );
     recordId = Number(res.lastInsertRowId);
     for (const item of payload.results ?? []) {
@@ -280,6 +282,113 @@ export async function submitRecord(id: number): Promise<void> {
     "UPDATE inspection_records SET status = 'Under Review', sync_status = 'pending', synced_at = NULL, updated_at = datetime('now','localtime') WHERE id = ?",
     id,
   );
+}
+
+/* ---------------------------------------------------------------------------
+   RESTORE — import a server record (with results) into the local DB.
+   Skips records already present locally (matched by web_id). Used after a
+   reinstall so an inspector's previously synced inspections come back.
+   --------------------------------------------------------------------------- */
+
+export interface ServerRecordInput {
+  id: number;
+  inspection_no: string;
+  application_no: string;
+  permit_no: string | null;
+  permit_date_issued: string | null;
+  project_title: string;
+  project_location: string | null;
+  owner_representative: string | null;
+  contact_number: string | null;
+  project_contractor: string | null;
+  project_engineer: string | null;
+  inspection_team: string | null;
+  inspection_date: string | null;
+  inspection_type: string | null;
+  inspection_result: string | null;
+  time_started: string | null;
+  time_finished: string | null;
+  physical_accomplishment: number | null;
+  mech_accomplishment: number | null;
+  extra_fields: Record<string, unknown> | null;
+  overall_findings: string | null;
+  recommendations: string | null;
+  completion_percentage: number | null;
+  status: string;
+  inspector_id: number;
+  inspector_name: string | null;
+  team_leader_1: number | null;
+  team_leader_2: number | null;
+  date_reinspected: string | null;
+  reviewed_by_name?: string | null;
+  review_remarks?: string | null;
+  review_date?: string | null;
+  approved_by_name?: string | null;
+  approval_remarks?: string | null;
+  approval_date?: string | null;
+  results: ChecklistPayload['results'];
+}
+
+export async function importServerRecord(rec: ServerRecordInput): Promise<{ imported: boolean; recordId: number | null }> {
+  const db = await getDb();
+  const existing = await db.getFirstAsync<{ id: number }>('SELECT id FROM inspection_records WHERE web_id = ?', rec.id);
+  if (existing) return { imported: false, recordId: existing.id };
+
+  const values = recordValues(rec as ChecklistPayload);
+  let recordId = 0;
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const res = await txn.runAsync(
+      `INSERT INTO inspection_records (
+        inspection_no, ${RECORD_COLUMNS.join(', ')}, status, inspector_id, inspector_name,
+        reviewed_by, review_date, review_remarks, approved_by, approval_date, approval_remarks,
+        web_id, sync_status, synced_at, is_demo
+      ) VALUES (?, ${RECORD_COLUMNS.map(() => '?').join(', ')}, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', datetime('now','localtime'), 0)`,
+      [
+        rec.inspection_no,
+        ...values,
+        rec.status || 'Draft',
+        rec.inspector_id ?? null,
+        rec.inspector_name ?? null,
+        rec.reviewed_by_name ?? null,
+        rec.review_date ?? null,
+        rec.review_remarks ?? null,
+        rec.approved_by_name ?? null,
+        rec.approval_date ?? null,
+        rec.approval_remarks ?? null,
+        rec.id,
+      ],
+    );
+    recordId = Number(res.lastInsertRowId);
+    for (const item of rec.results ?? []) {
+      await txn.runAsync(
+        'INSERT INTO inspection_results (record_id, template_item_id, category, item_text, item_type, result, remarks) VALUES (?,?,?,?,?,?,?)',
+        recordId,
+        item.template_item_id,
+        item.category,
+        item.item_text,
+        item.item_type,
+        item.result,
+        item.remarks ?? '',
+      );
+    }
+  });
+  return { imported: true, recordId };
+}
+
+export async function attachServerPhotos(
+  recordId: number,
+  photos: { id: number; file_path: string; caption: string | null }[],
+): Promise<void> {
+  const db = await getDb();
+  for (const p of photos) {
+    await db.runAsync(
+      "INSERT INTO inspection_photos (record_id, file_path, caption, web_photo_id, sync_status) VALUES (?,?,?,?,'synced')",
+      recordId,
+      p.file_path,
+      p.caption ?? null,
+      p.id,
+    );
+  }
 }
 
 export async function reviewRecord(
@@ -351,6 +460,45 @@ export async function getRecent(limit = 5): Promise<InspectionRecord[]> {
      FROM inspection_records ORDER BY created_at DESC, id DESC LIMIT ?`,
     limit,
   );
+}
+
+type RecordWithPhotos = InspectionRecord & { photos: InspectionPhoto[] };
+
+async function attachPhotos(records: InspectionRecord[]): Promise<RecordWithPhotos[]> {
+  if (records.length === 0) return [];
+  const db = await getDb();
+  const ids = records.map((r) => r.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const photoRows = await db.getAllAsync<{ record_id: number; id: number; file_path: string; caption: string | null }>(
+    `SELECT record_id, id, file_path, caption FROM inspection_photos WHERE record_id IN (${placeholders}) ORDER BY id`,
+    ids,
+  );
+  const byRecord = new Map<number, InspectionPhoto[]>();
+  for (const p of photoRows) {
+    const list = byRecord.get(p.record_id) ?? [];
+    list.push({ id: p.id, file_path: p.file_path, caption: p.caption });
+    byRecord.set(p.record_id, list);
+  }
+  return records.map((r) => ({ ...r, photos: byRecord.get(r.id) ?? [] }));
+}
+
+export async function getRecentWithPhotos(limit = 5): Promise<RecordWithPhotos[]> {
+  const db = await getDb();
+  const records = await db.getAllAsync<InspectionRecord>(
+    `SELECT id, inspection_no, application_no, permit_no, project_title, project_location, owner_representative, contact_number, inspection_date, status, inspector_name, created_at
+     FROM inspection_records ORDER BY created_at DESC, id DESC LIMIT ?`,
+    limit,
+  );
+  return attachPhotos(records);
+}
+
+export async function getAllRecordsWithPhotos(): Promise<RecordWithPhotos[]> {
+  const db = await getDb();
+  const records = await db.getAllAsync<InspectionRecord>(
+    `SELECT id, inspection_no, application_no, permit_no, project_title, project_location, owner_representative, contact_number, inspection_date, status, inspector_name, created_at
+     FROM inspection_records ORDER BY inspection_date DESC, id DESC`,
+  );
+  return attachPhotos(records);
 }
 
 async function nextInspectionNo(): Promise<string> {

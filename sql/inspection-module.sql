@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS inspection_records (
     overall_findings TEXT DEFAULT NULL,
     recommendations TEXT DEFAULT NULL,
     completion_percentage DECIMAL(5,2) DEFAULT NULL,
+    date_reinspected DATE DEFAULT NULL,
     status ENUM('Draft','Under Review','Approved','Completed','Rejected') NOT NULL DEFAULT 'Draft',
     inspector_id INT DEFAULT NULL,
     reviewed_by INT DEFAULT NULL,
@@ -260,6 +261,18 @@ SET @ex_col = (
 );
 SET @ddl = IF(@ex_col = 0,
     'ALTER TABLE inspection_records ADD COLUMN extra_fields TEXT DEFAULT NULL AFTER mech_accomplishment',
+    'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- inspection_records: date_reinspected
+SET @reinsp_col = (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = 'pams_db' AND TABLE_NAME = 'inspection_records' AND COLUMN_NAME = 'date_reinspected'
+);
+SET @ddl = IF(@reinsp_col = 0,
+    'ALTER TABLE inspection_records ADD COLUMN date_reinspected DATE DEFAULT NULL AFTER team_leader_2',
     'SELECT 1');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;

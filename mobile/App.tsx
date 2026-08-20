@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { SplashScreen } from './src/navigation/MainTabs';
+import UpdatePromptModal from './src/components/UpdatePromptModal';
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -30,6 +31,7 @@ export default function App() {
       <AuthProvider>
         <StatusBar style="light" />
         <RootNavigator />
+        <UpdatePromptModal />
       </AuthProvider>
     </SafeAreaProvider>
   );

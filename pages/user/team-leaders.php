@@ -23,7 +23,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260820e">
   <style>
     .tl-team-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .tl-team-card { border:1.5px solid var(--gray-200); border-radius:12px; padding:12px; text-align:center; cursor:pointer; transition:.15s; }

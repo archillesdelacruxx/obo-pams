@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../config';
+import { getApiBaseUrl } from '../config';
 
 export class ApiError extends Error {
   status: number;
@@ -43,7 +43,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+    res = await fetch(`${getApiBaseUrl()}${path}`, { ...options, headers });
   } catch {
     throw new ApiError(0, 'Unable to reach the server. Check your Wi-Fi / connection.');
   }

@@ -110,8 +110,9 @@ export default function CategoryCard({
                 style={styles.input}
                 placeholder="e.g. 2nd Floor"
                 value={extra.floorLevel ?? ''}
-                onChangeText={(v) => onExtra({ floorLevel: v })}
+                onChangeText={(v) => onExtra({ floorLevel: v.toUpperCase() })}
                 editable={!disabled}
+                autoCapitalize="characters"
               />
             </View>
           )}
@@ -126,8 +127,9 @@ export default function CategoryCard({
                     style={[styles.input, { marginBottom: 8 }]}
                     placeholder="Specify"
                     value={extra.others ?? ''}
-                    onChangeText={(v) => onExtra({ others: v })}
+                    onChangeText={(v) => onExtra({ others: v.toUpperCase() })}
                     editable={!disabled}
+                    autoCapitalize="characters"
                   />
                 )}
                 <ResultSegmented
@@ -178,8 +180,9 @@ export default function CategoryCard({
               style={[styles.input, styles.remarkInput]}
               placeholder="Remarks (optional)"
               value={remark}
-              onChangeText={onRemarkChange}
+              onChangeText={(v) => onRemarkChange(v.toUpperCase())}
               multiline
+              autoCapitalize="characters"
               editable={!disabled}
             />
           </View>
@@ -295,6 +298,7 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: colors.gray800,
     backgroundColor: colors.white,
+    textTransform: 'uppercase',
   },
   itemRow: {
     paddingVertical: 10,

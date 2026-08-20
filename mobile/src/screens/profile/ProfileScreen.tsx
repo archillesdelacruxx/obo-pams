@@ -11,12 +11,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fonts } from '../../theme/tokens';
 import { useAuth } from '../../context/AuthContext';
 import { apiProfileUpdate, apiProfileUploadPhoto } from '../../api/profile';
 import { photoUrl } from '../../api/inspection';
+import { getServerHost, setServerHost } from '../../config';
+import { scheduleSync } from '../../db/sync';
 
 function initials(name: string): string {
   return name
@@ -56,6 +59,8 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [serverHostInput, setServerHostInput] = useState(getServerHost());
+  const [savingServer, setSavingServer] = useState(false);
 
   if (!user) return null;
 
@@ -122,12 +127,36 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const onSaveServer = async () => {
+    if (!serverHostInput.trim()) {
+      Alert.alert('Missing details', 'Server address is required.');
+      return;
+    }
+    setSavingServer(true);
+    try {
+      await setServerHost(serverHostInput.trim());
+      Alert.alert('Saved', 'Server address updated. Syncing…');
+      scheduleSync(500);
+    } catch {
+      Alert.alert('Error', 'Could not save the server address.');
+    } finally {
+      setSavingServer(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <Text style={styles.headerSub}>Your account and personal information</Text>
-      </View>
+      <LinearGradient colors={[colors.navy900, colors.navy700]} style={styles.header}>
+        <View style={styles.headerBrand}>
+          <View style={styles.logoWrap}>
+            <Image source={require('../../../assets/images/obo-logo.png')} style={styles.logoImg} resizeMode="contain" />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Profile</Text>
+            <Text style={styles.headerSub}>Your account and personal information</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
@@ -201,6 +230,32 @@ export default function ProfileScreen() {
           </View>
         ) : null}
 
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Server Settings</Text>
+          <Text style={styles.label}>Server Address</Text>
+          <TextInput
+            style={styles.input}
+            value={serverHostInput}
+            onChangeText={setServerHostInput}
+            placeholder="e.g. 192.168.1.100:8080"
+            placeholderTextColor={colors.gray400}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+          <Text style={styles.serverHint}>IP / hostname ng PC na nagpapatakbo ng PAMS (same Wi-Fi).</Text>
+          <Pressable style={[styles.saveBtn, savingServer && styles.saveBtnDisabled]} onPress={onSaveServer} disabled={savingServer}>
+            {savingServer ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <>
+                <Ionicons name="server-outline" size={18} color={colors.white} />
+                <Text style={styles.saveBtnText}>Save Server Address</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+
         <Pressable style={styles.signOutBtn} onPress={onSignOut} disabled={signingOut}>
           {signingOut ? (
             <ActivityIndicator size="small" color={colors.danger} />
@@ -226,6 +281,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 18,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
+    shadowColor: colors.navy900,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+  },
+  logoImg: {
+    width: 32,
+    height: 32,
   },
   headerTitle: {
     fontFamily: fonts.display,
@@ -363,6 +443,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodySemi,
     fontSize: 14,
     color: colors.white,
+  },
+  serverHint: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.gray500,
+    marginTop: 8,
   },
   badges: {
     flexDirection: 'row',

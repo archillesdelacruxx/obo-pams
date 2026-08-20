@@ -7,8 +7,9 @@ import Skeleton from './Skeleton';
 import type { InspectionReportRow } from '../types';
 
 const COLS = [
-  { key: 'inspection_no', label: 'Inspection No.', width: 132 },
-  { key: 'application_no', label: 'Application No.', width: 124 },
+  { key: 'inspection_no', label: 'No.', width: 110 },
+  { key: 'application_no', label: 'Application No.', width: 130 },
+  { key: 'permit_no', label: 'Building Permit', width: 130 },
   { key: 'project_title', label: 'Project Title', width: 210 },
   { key: 'inspection_date', label: 'Inspection Date', width: 122 },
   { key: 'team', label: 'Inspecting Team', width: 205 },
@@ -71,7 +72,7 @@ export default function MonitoringTable({ rows, loading, error, onRowPress, onRo
               message="Start a new on-site inspection using the New button above."
             />
           ) : (
-            rows.map((r) => (
+            rows.map((r, idx) => (
               <Pressable
                 key={r.id}
                 style={styles.row}
@@ -82,7 +83,7 @@ export default function MonitoringTable({ rows, loading, error, onRowPress, onRo
                 <View style={styles.rowCells}>
                   <View style={[styles.cell, { width: COLS[0].width }]}>
                     <Text style={styles.cellId} numberOfLines={1}>
-                      {r.inspection_no}
+                      {idx + 1}
                     </Text>
                   </View>
                   <View style={[styles.cell, { width: COLS[1].width }]}>
@@ -91,14 +92,19 @@ export default function MonitoringTable({ rows, loading, error, onRowPress, onRo
                     </Text>
                   </View>
                   <View style={[styles.cell, { width: COLS[2].width }]}>
+                    <Text style={styles.cellId} numberOfLines={1}>
+                      {r.permit_no || '—'}
+                    </Text>
+                  </View>
+                  <View style={[styles.cell, { width: COLS[3].width }]}>
                     <Text style={styles.cellTitle} numberOfLines={1}>
                       {r.project_title}
                     </Text>
                   </View>
-                  <View style={[styles.cell, { width: COLS[3].width }]}>
+                  <View style={[styles.cell, { width: COLS[4].width }]}>
                     <Text style={styles.cellText}>{formatDate(r.inspection_date)}</Text>
                   </View>
-                  <View style={[styles.cell, { width: COLS[4].width }]}>
+                  <View style={[styles.cell, { width: COLS[5].width }]}>
                     <Text style={styles.cellText} numberOfLines={1}>
                       {r.team_leader_1_name
                         ? r.team_leader_2_name
@@ -107,7 +113,7 @@ export default function MonitoringTable({ rows, loading, error, onRowPress, onRo
                         : '—'}
                     </Text>
                   </View>
-                  <View style={[styles.cell, { width: COLS[5].width }]}>
+                  <View style={[styles.cell, { width: COLS[6].width }]}>
                     <StatusPill status={r.status} />
                   </View>
                 </View>

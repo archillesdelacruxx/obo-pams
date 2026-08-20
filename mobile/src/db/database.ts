@@ -3,12 +3,13 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { ItemResult } from '../types';
 import { SEED_TEMPLATE_ITEMS, SEED_TEAM_LEADERS } from './seedData';
 
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 let dbPromise: Promise<SQLiteDatabase> | null = null;
 
 export function getDb(): Promise<SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabaseAsync('pams.db').then(async (db) => {
+      await db.execAsync('PRAGMA busy_timeout = 5000');
       await migrate(db);
       return db;
     });
@@ -144,6 +145,7 @@ async function migrate(db: SQLiteDatabase): Promise<void> {
   await ensureColumn(db, 'inspection_photos', 'web_photo_id', 'web_photo_id INTEGER');
   await ensureColumn(db, 'inspection_photos', 'sync_status', "sync_status TEXT NOT NULL DEFAULT 'pending'");
   await ensureColumn(db, 'team_leaders', 'is_active', 'is_active INTEGER NOT NULL DEFAULT 1');
+  await ensureColumn(db, 'inspection_records', 'date_reinspected', 'date_reinspected TEXT');
   await db.runAsync("UPDATE inspection_records SET is_demo = 1 WHERE is_demo = 0 AND inspection_no IN ('INS-2026-0001','INS-2026-0002')");
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

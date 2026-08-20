@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,9 +17,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts } from '../../theme/tokens';
 import StatusPill from '../../components/StatusPill';
-import { getRecord as repoGetRecord, reviewRecord as repoReviewRecord } from '../../db/inspectionRepo';
-import { scheduleSync } from '../../db/sync';
+import {
+  deleteRecord as repoDeleteRecord,
+  getRecord as repoGetRecord,
+  reviewRecord as repoReviewRecord,
+} from '../../db/inspectionRepo';
+import { scheduleSync, subscribeSync } from '../../db/sync';
 import { useAuth } from '../../context/AuthContext';
+import { resolvePhotoUri } from '../../utils/media';
+import PhotoViewerModal from '../../components/PhotoViewerModal';
 import type { InspectionRecordDetail, ItemResult } from '../../types';
 import type { InspectionsStackParamList } from '../../navigation/types';
 
@@ -40,15 +46,19 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
   const [reviewAction, setReviewAction] = useState<'review' | 'reject'>('review');
   const [remarks, setRemarks] = useState('');
   const [busy, setBusy] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   const canReview = permissions.includes('inspection-edit');
+  const canDelete = permissions.includes('inspection-delete');
 
   const load = useCallback(async () => {
     try {
       const d = await repoGetRecord(id);
+      console.log('[DetailScreen] load id=', id, 'photos=', d?.photos?.length, 'photosData=', JSON.stringify(d?.photos));
       setDetail(d);
-    } catch {
-      /* handled below */
+    } catch (err) {
+      console.log('[DetailScreen] load error', err);
     } finally {
       setLoading(false);
     }
@@ -59,6 +69,11 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
       load();
     }, [load]),
   );
+
+  useEffect(() => {
+    const unsub = subscribeSync(() => load());
+    return unsub;
+  }, [load]);
 
   const openReview = (action: 'review' | 'reject') => {
     setRemarks('');
@@ -73,7 +88,7 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
     }
     setBusy(true);
     try {
-      const newStatus = await repoReviewRecord(id, reviewAction, '', remarks.trim(), user?.full_name ?? '');
+      const newStatus = await repoReviewRecord(id, reviewAction, remarks.trim(), user?.full_name ?? '');
       setReviewOpen(false);
       Alert.alert('Done', `The inspection has been marked as ${newStatus}.`);
       scheduleSync();
@@ -83,6 +98,30 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete inspection',
+      `Delete "${detail?.project_title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!detail) return;
+            try {
+              await repoDeleteRecord(detail.id);
+              scheduleSync();
+              navigation.goBack();
+            } catch {
+              Alert.alert('Error', 'Could not delete the inspection.');
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading) {
@@ -101,7 +140,7 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const editable = detail.status === 'Draft' || detail.status === 'Rejected';
+  const editable = canReview || detail.status === 'Draft' || detail.status === 'Rejected';
   const grouped: Record<string, { item: string; result: ItemResult }[]> = {};
   for (const r of detail.results) {
     if (!grouped[r.category]) grouped[r.category] = [];
@@ -200,8 +239,25 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
           {photos.length ? (
             <View style={styles.photoGrid}>
               {photos.map((p) => {
-                const uri = p.file_path;
-                return <Image key={p.id} source={uri ? { uri } : undefined} style={styles.photo} resizeMode="cover" />;
+                const uri = resolvePhotoUri(p.file_path);
+                return (
+                  <Pressable
+                    key={p.id}
+                    style={styles.photoCell}
+                    onPress={() => {
+                      const idx = photos.indexOf(p);
+                      setViewerIndex(idx >= 0 ? idx : 0);
+                      setViewerOpen(true);
+                    }}
+                  >
+                    <Image
+                      source={uri ? { uri } : undefined}
+                      style={styles.photo}
+                      resizeMode="cover"
+                    />
+                    {p.caption ? <Text style={styles.photoCaption} numberOfLines={1}>{p.caption}</Text> : null}
+                  </Pressable>
+                );
               })}
             </View>
           ) : (
@@ -214,6 +270,12 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
             <Pressable style={[styles.btn, styles.btnOutline]} onPress={() => navigation.navigate('InspectionForm', { id })}>
               <Ionicons name="create-outline" size={16} color={colors.primary} />
               <Text style={styles.btnOutlineText}>Edit</Text>
+            </Pressable>
+          )}
+          {canDelete && (
+            <Pressable style={[styles.btn, styles.btnDanger]} onPress={confirmDelete}>
+              <Ionicons name="trash-outline" size={16} color={colors.white} />
+              <Text style={styles.btnPrimaryText}>Delete</Text>
             </Pressable>
           )}
           {canReview && detail.status === 'Under Review' && (
@@ -256,9 +318,17 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
                 >
                   <Text style={styles.btnGhostText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[styles.btn, styles.btnPrimary, { flex: 1 }]} onPress={confirmReview} disabled={busy}>
+                <Pressable
+                  style={[
+                    styles.btn,
+                    reviewAction === 'reject' ? styles.btnDanger : styles.btnPrimary,
+                    { flex: 1 },
+                  ]}
+                  onPress={confirmReview}
+                  disabled={busy}
+                >
                   {busy ? (
-                    <ActivityIndicator size="small" color={colors.white} />
+                    <ActivityIndicator color={colors.white} />
                   ) : (
                     <Text style={styles.btnPrimaryText}>Confirm</Text>
                   )}
@@ -267,6 +337,14 @@ export default function InspectionDetailScreen({ route, navigation }: Props) {
             </View>
           </View>
         </Modal>
+
+        <PhotoViewerModal
+          visible={viewerOpen}
+          photos={photos}
+          initialIndex={viewerIndex}
+          title={detail.inspection_no}
+          onClose={() => setViewerOpen(false)}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -416,13 +494,30 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  photo: {
+  photoCell: {
     width: '31%',
     aspectRatio: 1,
     borderRadius: 10,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.gray200,
     backgroundColor: colors.gray50,
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  photoCaption: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    color: colors.white,
+    fontFamily: fonts.body,
+    fontSize: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   actions: {
     flexDirection: 'row',

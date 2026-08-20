@@ -18,6 +18,7 @@ import { colors, fonts, radii, spacing } from '../theme/tokens';
 import FormInput from '../components/FormInput';
 import PressableScale from '../components/PressableScale';
 import { useAuth } from '../context/AuthContext';
+import { getServerHost, setServerHost } from '../config';
 
 function LogoChip({ source, name }: { source: number; name: string }) {
   return (
@@ -40,6 +41,8 @@ export default function LoginScreen() {
   const [lockUntil, setLockUntil] = useState<number | null>(null);
   const [lockNow, setLockNow] = useState<number | null>(null);
   const [remaining, setRemaining] = useState(0);
+  const [serverHost, setServerHostLocal] = useState(getServerHost());
+  const [showServer, setShowServer] = useState(false);
 
   const lockTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const passRef = useRef<TextInput>(null);
@@ -95,6 +98,7 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     clearError();
     if (!validate()) return;
+    if (serverHost.trim()) await setServerHost(serverHost.trim());
     setSubmitting(true);
     try {
       await signIn(username.trim(), password, remember);
@@ -186,6 +190,25 @@ export default function LoginScreen() {
                 </View>
                 <Text style={styles.rememberText}>Remember me</Text>
               </PressableScale>
+
+              <PressableScale onPress={() => setShowServer((s) => !s)} style={styles.serverToggle}>
+                <Ionicons name={showServer ? 'chevron-up' : 'server-outline'} size={16} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.serverToggleText}>Server address: {getServerHost()}</Text>
+              </PressableScale>
+
+              {showServer ? (
+                <TextInput
+                  style={styles.serverInput}
+                  value={serverHost}
+                  onChangeText={setServerHostLocal}
+                  placeholder="e.g. 192.168.1.100:8080"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  editable={!submitting}
+                />
+              ) : null}
 
               <PressableScale
                 onPress={handleSubmit}
@@ -343,6 +366,31 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 13,
     color: 'rgba(255,255,255,0.85)',
+  },
+  serverToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 14,
+    marginTop: -6,
+  },
+  serverToggleText: {
+    fontFamily: fonts.body,
+    fontSize: 12.5,
+    color: 'rgba(255,255,255,0.8)',
+    flex: 1,
+  },
+  serverInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: radii.input,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.white,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 16,
   },
   signInBtn: {
     backgroundColor: colors.white,

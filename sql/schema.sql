@@ -335,6 +335,7 @@ CREATE TABLE inspection_records (
     inspector_id INT DEFAULT NULL,
     team_leader_1 INT DEFAULT NULL,
     team_leader_2 INT DEFAULT NULL,
+    date_reinspected DATE DEFAULT NULL,
     reviewed_by INT DEFAULT NULL,
     review_date DATETIME DEFAULT NULL,
     review_remarks TEXT DEFAULT NULL,

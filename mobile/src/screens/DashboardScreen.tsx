@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  AppState,
+  Image,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,16 +17,23 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { colors, fonts, radii, shadows, spacing } from '../theme/tokens';
 import { useAuth } from '../context/AuthContext';
 import { apiGetUnreadNotifications } from '../api/auth';
-import { getRecent, getStats } from '../db/inspectionRepo';
-import type { InspectionRecord, InspectionStats } from '../types';
+import { getRecentWithPhotos, getStats } from '../db/inspectionRepo';
+import { subscribeSync } from '../db/sync';
+import { resolvePhotoUri } from '../utils/media';
+import type { InspectionPhoto, InspectionRecord, InspectionStats } from '../types';
 import type { MainTabParamList } from '../navigation/types';
 import PressableScale from '../components/PressableScale';
 import StatusPill from '../components/StatusPill';
 import EmptyState from '../components/EmptyState';
 import Skeleton from '../components/Skeleton';
 import NotificationsModal from '../components/NotificationsModal';
+import PhotoViewerModal from '../components/PhotoViewerModal';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'Home'>;
+
+type RecentRecord = InspectionRecord & { photos: InspectionPhoto[] };
+
+const REFRESH_INTERVAL_MS = 5000;
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -75,15 +86,18 @@ export default function DashboardScreen({ navigation }: Props) {
   const firstName = user?.full_name?.split(' ')[0] ?? 'User';
 
   const [stats, setStats] = useState<InspectionStats | null>(null);
-  const [recent, setRecent] = useState<InspectionRecord[]>([]);
+  const [recent, setRecent] = useState<RecentRecord[]>([]);
   const [unread, setUnread] = useState(0);
   const [notifOpen, setNotifOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerPhotos, setViewerPhotos] = useState<InspectionPhoto[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [s, r] = await Promise.all([getStats(), getRecent(5)]);
+      const [s, r] = await Promise.all([getStats(), getRecentWithPhotos(5)]);
       setStats(s);
       setRecent((r ?? []).slice(0, 3));
     } catch {
@@ -98,14 +112,49 @@ export default function DashboardScreen({ navigation }: Props) {
       .catch(() => undefined);
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  /* Reload after every background sync (admin review decisions land here). */
   useEffect(() => {
-    load();
+    const unsub = subscribeSync(() => void load());
+    return unsub;
+  }, [load]);
+
+  /* Lightweight foreground polling keeps the cards near real-time. */
+  useEffect(() => {
+    const poll = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      void load();
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(poll);
   }, [load]);
 
   const onRefresh = () => {
     setRefreshing(true);
     load();
   };
+
+  const openRecord = useCallback(
+    (item: RecentRecord) => {
+      if (item.status === 'Draft' || item.status === 'Rejected') {
+        navigation.navigate('Inspections', { screen: 'InspectionForm', params: { id: item.id } });
+      } else {
+        navigation.navigate('Inspections', { screen: 'InspectionDetail', params: { id: item.id } });
+      }
+    },
+    [navigation],
+  );
+
+  const openPhotos = useCallback((item: RecentRecord, index: number) => {
+    if (!item.photos.length) return;
+    setViewerPhotos(item.photos);
+    setViewerIndex(index);
+    setViewerOpen(true);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -173,12 +222,15 @@ export default function DashboardScreen({ navigation }: Props) {
             <Text style={styles.quickTitle}>Checklists</Text>
             <Text style={styles.quickSub}>Drafts & records</Text>
           </PressableScale>
-          <PressableScale style={[styles.quickTile, shadows.card]} onPress={() => navigation.navigate('Inspections')}>
+          <PressableScale
+            style={[styles.quickTile, shadows.card]}
+            onPress={() => navigation.navigate('Inspections', { screen: 'SitePhotos' })}
+          >
             <View style={[styles.quickIcon, { backgroundColor: colors.primary100 }]}>
               <Ionicons name="camera-outline" size={24} color={colors.primary} />
             </View>
             <Text style={styles.quickTitle}>Site Photos</Text>
-            <Text style={styles.quickSub}>Attachments</Text>
+            <Text style={styles.quickSub}>All attachments</Text>
           </PressableScale>
         </View>
 
@@ -207,29 +259,71 @@ export default function DashboardScreen({ navigation }: Props) {
             <PressableScale
               key={item.id}
               style={[styles.recentCard, shadows.card]}
-              onPress={() => navigation.navigate('Inspections')}
+              onPress={() => openRecord(item)}
             >
-              <View style={styles.recentBody}>
-                <Text style={styles.recentNo}>{item.inspection_no}</Text>
-                <Text style={styles.recentTitle} numberOfLines={1}>
-                  {item.project_title || 'Untitled project'}
-                </Text>
-                <Text style={styles.recentDate}>
-                  {formatInspectionDate(item.inspection_date)}
-                  {item.inspection_date ? ' · ' : ''}
-                  {item.project_location ? item.project_location : ''}
-                </Text>
+              <View style={styles.recentRow}>
+                <View style={styles.recentBody}>
+                  <Text style={styles.recentNo}>{item.inspection_no}</Text>
+                  <Text style={styles.recentTitle} numberOfLines={1}>
+                    {item.project_title || 'Untitled project'}
+                  </Text>
+                  <Text style={styles.recentDate}>
+                    {formatInspectionDate(item.inspection_date)}
+                    {item.inspection_date ? ' · ' : ''}
+                    {item.project_location ? item.project_location : ''}
+                  </Text>
+                </View>
+                <View style={styles.recentRight}>
+                  <StatusPill status={item.status} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+                </View>
               </View>
-              <View style={styles.recentRight}>
-                <StatusPill status={item.status} />
-                <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-              </View>
+              {item.photos.length > 0 ? (
+                <View style={styles.photoStrip}>
+                  <View style={styles.photoIcons}>
+                    {item.photos.slice(0, 3).map((p, i) => {
+                      const uri = resolvePhotoUri(p.file_path);
+                      return (
+                        <Pressable
+                          key={p.id}
+                          style={styles.photoThumbWrap}
+                          onPress={() => openPhotos(item, i)}
+                          hitSlop={4}
+                        >
+                          {uri ? (
+                            <Image source={{ uri }} style={styles.photoThumb} resizeMode="cover" />
+                          ) : (
+                            <View style={styles.photoThumbEmpty} />
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                    {item.photos.length > 3 ? (
+                      <Pressable style={styles.photoMore} onPress={() => openPhotos(item, 3)} hitSlop={4}>
+                        <Text style={styles.photoMoreText}>+{item.photos.length - 3}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <View style={styles.photoCount}>
+                    <Ionicons name="camera-outline" size={12} color={colors.gray500} />
+                    <Text style={styles.photoCountText}>{item.photos.length}</Text>
+                  </View>
+                </View>
+              ) : null}
             </PressableScale>
           ))
         )}
       </ScrollView>
 
       <NotificationsModal visible={notifOpen} onClose={() => setNotifOpen(false)} onCountChange={setUnread} />
+
+      <PhotoViewerModal
+        visible={viewerOpen}
+        photos={viewerPhotos}
+        initialIndex={viewerIndex}
+        title="Site Photos"
+        onClose={() => setViewerOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -406,12 +500,70 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   recentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radii.card,
     padding: spacing.lg,
     marginBottom: 10,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  photoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray100,
+  },
+  photoIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  photoThumbWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.gray50,
+  },
+  photoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  photoThumbEmpty: {
+    width: 40,
+    height: 40,
+    backgroundColor: colors.gray50,
+  },
+  photoMore: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: colors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoMoreText: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 12,
+    color: colors.gray600,
+  },
+  photoCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  photoCountText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.gray500,
   },
   recentBody: {
     flex: 1,

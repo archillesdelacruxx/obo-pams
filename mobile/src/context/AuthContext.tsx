@@ -4,6 +4,8 @@ import * as SecureStore from 'expo-secure-store';
 import { apiLogin, apiLogout } from '../api/auth';
 import { setAuthToken, setOnUnauthorized } from '../api/client';
 import { runSync, scheduleSync } from '../db/sync';
+import { initServerHost } from '../config';
+import { configureNotifications, ensureNotificationsPermission } from '../notifications';
 import type { LoginResponse, User } from '../types';
 
 const TOKEN_KEY = 'pams_token';
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      await initServerHost();
       const stored = await readStoredSession();
       if (!mounted) return;
       if (stored) {
@@ -82,6 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      show up on the phone within seconds on the same WiFi network. */
   useEffect(() => {
     if (status !== 'signedIn') return;
+    void configureNotifications();
+    void ensureNotificationsPermission();
     scheduleSync(1500);
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') scheduleSync(800);

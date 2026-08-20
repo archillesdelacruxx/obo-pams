@@ -134,6 +134,7 @@ export interface InspectionRecordDetail extends InspectionRecord {
   team_leader_2: number | null;
   team_leader_2_name?: string | null;
   team_leader_2_position?: string | null;
+  date_reinspected: string | null;
   results: InspectionResultRow[];
   photos: InspectionPhoto[];
 }
@@ -180,6 +181,7 @@ export interface ChecklistPayload {
   completion_percentage?: number | null;
   team_leader_1?: number | null;
   team_leader_2?: number | null;
+  date_reinspected?: string | null;
   results: ChecklistResultItem[];
 }
 

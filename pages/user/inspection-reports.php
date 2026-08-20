@@ -26,10 +26,10 @@ $colspan = $hasActions ? '7' : '6';
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260820e">
   <style>
     @media print {
-      @page { size: 8.5in 13in; margin: 30px 20px 30px 20px; }
+      @page { size: 8.5in 13in; margin: 1px 1px 30px 1px; }
     }
   </style>
 </head>

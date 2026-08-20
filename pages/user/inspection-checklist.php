@@ -24,7 +24,7 @@ $perms = getUserModulePermissions();
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260820e">
 </head>
 <body data-page="inspection-checklist" data-is-admin="<?php echo empty($_SESSION['is_admin']) ? '0' : '1'; ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
   <div class="app-shell" id="appShell">
@@ -47,8 +47,8 @@ $perms = getUserModulePermissions();
               <input type="hidden" id="inschInspectionNo" value="">
               <div class="form-grid">
                 <input type="hidden" id="inschAppNo" value="">
-                <div class="form-group"><label>Team Leader 1</label><div class="tl-select t1"><div class="tl-team-chip">1</div><select id="inschTeamLeader1"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
-                <div class="form-group"><label>Team Leader 2</label><div class="tl-select t2"><div class="tl-team-chip">2</div><select id="inschTeamLeader2"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
+                <div class="form-group"><label>Team Leader A</label><div class="tl-select t1"><div class="tl-team-chip">A</div><select id="inschTeamLeader1"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
+                <div class="form-group"><label>Team Leader B</label><div class="tl-select t2"><div class="tl-team-chip">B</div><select id="inschTeamLeader2"><option value="">Select team leader</option></select><svg class="tl-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div></div>
                 <div class="form-group"><label>Date Inspected <span class="req">*</span></label><input class="form-control" type="date" id="inschDate"></div>
                 <div class="form-group">
                   <label>Inspection Type</label>
@@ -66,23 +66,12 @@ $perms = getUserModulePermissions();
                 <div class="form-group"><label>Physical accomplishment (%)</label><input class="form-control" type="number" id="inschPhysical" min="0" max="100" placeholder="e.g. 75"></div>
                 <div class="form-group"><label>Owner / representative</label><input class="form-control" type="text" id="inschOwner" placeholder="Owner or representative"></div>
                 <div class="form-group"><label>Contact number</label><input class="form-control form-mono" type="text" id="inschContact" placeholder="e.g. 0917-000-0000"></div>
-                <div class="form-group"><label>Contractor</label><input class="form-control" type="text" id="inschContractor" placeholder="Contractor"></div>
                 <div class="form-group"><label>Project Engineer</label><input class="form-control" type="text" id="inschEngineer" placeholder="Project engineer"></div>
                 <div class="form-group"><label>Location</label><input class="form-control" type="text" id="inschLocation" placeholder="Site address"></div>
-                <div class="form-group"><label>Time Start</label><input class="form-control" type="time" id="inschTimeStart"></div>
-                <div class="form-group"><label>Time Finished</label><input class="form-control" type="time" id="inschTimeEnd"></div>
+                <div class="form-group"><label>Time Start</label><div class="time-picker-row" data-time-group="inschTimeStart"><select class="form-control time-sel" data-unit="h"><option value="">Hr</option><?php for($h=1;$h<=12;$h++):?><option value="<?php echo $h?>"><?php echo $h?></option><?php endfor;?></select><span class="time-sep">:</span><select class="form-control time-sel" data-unit="m"><option value="">Min</option><?php foreach(['00','05','10','15','20','25','30','35','40','45','50','55'] as $m):?><option value="<?php echo $m?>"><?php echo $m?></option><?php endforeach;?></select><select class="form-control time-sel" data-unit="ap"><option value="">AM/PM</option><option value="AM">AM</option><option value="PM">PM</option></select><input type="hidden" id="inschTimeStart" value=""></div></div>
+                <div class="form-group"><label>Time Finished</label><div class="time-picker-row" data-time-group="inschTimeEnd"><select class="form-control time-sel" data-unit="h"><option value="">Hr</option><?php for($h=1;$h<=12;$h++):?><option value="<?php echo $h?>"><?php echo $h?></option><?php endfor;?></select><span class="time-sep">:</span><select class="form-control time-sel" data-unit="m"><option value="">Min</option><?php foreach(['00','05','10','15','20','25','30','35','40','45','50','55'] as $m):?><option value="<?php echo $m?>"><?php echo $m?></option><?php endforeach;?></select><select class="form-control time-sel" data-unit="ap"><option value="">AM/PM</option><option value="AM">AM</option><option value="PM">PM</option></select><input type="hidden" id="inschTimeEnd" value=""></div></div>
                 <div class="form-group full"><label>Overall Findings</label><textarea class="form-control" id="inschFindings" rows="3" placeholder="Summary of findings"></textarea></div>
                 <div class="form-group full"><label>Recommendations</label><textarea class="form-control" id="inschRecommendations" rows="3" placeholder="Recommended actions / compliance items"></textarea></div>
-                <div class="form-group full">
-                  <label>Inspection Result</label>
-                  <div class="insp-result-pills">
-                    <label class="radio-pill"><input type="radio" name="inschResult" value="Passed"><span>Passed</span></label>
-                    <label class="radio-pill"><input type="radio" name="inschResult" value="Passed with Remarks"><span>Passed with Remarks</span></label>
-                    <label class="radio-pill"><input type="radio" name="inschResult" value="Ongoing"><span>Ongoing</span></label>
-                    <label class="radio-pill"><input type="radio" name="inschResult" value="Failed"><span>Failed</span></label>
-                    <label class="radio-pill"><input type="radio" name="inschResult" value="For Re-inspection"><span>For Re-inspection</span></label>
-                  </div>
-                </div>
               </div>
             </form>
           </div>

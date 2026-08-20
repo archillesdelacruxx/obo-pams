@@ -19,12 +19,12 @@ import StepProgressBar from '../../components/inspection/StepProgressBar';
 import CategoryCard from '../../components/inspection/CategoryCard';
 import { DateField, Field, InfoRow, PickerField, PillGroup } from '../../components/inspection/FormControls';
 import useInspectionForm from './useInspectionForm';
+import { resolvePhotoUri } from '../../utils/media';
 import type { InspectionsStackParamList } from '../../navigation/types';
 
 type Props = NativeStackScreenProps<InspectionsStackParamList, 'InspectionForm'>;
 
 const INSPECTION_TYPES = ['1st', '2nd', '3rd', 'Others'];
-const RESULT_OPTIONS = ['Passed', 'Passed with Remarks', 'Ongoing', 'Failed', 'For Re-inspection'];
 
 function Btn({
   label,
@@ -112,7 +112,7 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
         return;
       }
     }
-    navigation.goBack();
+    navigation.navigate('InspectionsList');
   };
 
   const handleNext = async () => {
@@ -121,12 +121,12 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
         Alert.alert('Missing details', 'Project Title and Date Inspected are required.');
         return;
       }
-      try {
-        await form.saveDraft();
-      } catch {
-        Alert.alert('Error', 'Could not save. Please try again.');
-        return;
-      }
+    }
+    try {
+      await form.saveDraft();
+    } catch {
+      Alert.alert('Error', 'Could not save. Please try again.');
+      return;
     }
     setStep((s) => s + 1);
   };
@@ -251,14 +251,14 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Team</Text>
               <PickerField
-                label="Team Leader 1"
+                label="Team Leader A"
                 value={form.info.teamLeader1}
                 options={toOptions(tlOpts1)}
                 onChange={(v) => form.updateInfo({ teamLeader1: Number(v) })}
                 placeholder="Select a team leader"
               />
               <PickerField
-                label="Team Leader 2 (optional)"
+                label="Team Leader B (optional)"
                 value={form.info.teamLeader2}
                 options={toOptions(tlOpts2)}
                 onChange={(v) => form.updateInfo({ teamLeader2: Number(v) })}
@@ -289,6 +289,12 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
                   placeholder="Enter the type"
                 />
               )}
+              <Field
+                label="Application No."
+                value={form.info.applicationNo}
+                onChange={(v) => form.updateInfo({ applicationNo: v })}
+                placeholder="Application #"
+              />
               <View style={styles.row2}>
                 <Field
                   label="Building Permit No."
@@ -347,12 +353,6 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
                 />
               </View>
               <Field
-                label="Contractor"
-                value={form.info.contractor}
-                onChange={(v) => form.updateInfo({ contractor: v })}
-                placeholder="Contractor name"
-              />
-              <Field
                 label="Engineer"
                 value={form.info.engineer}
                 onChange={(v) => form.updateInfo({ engineer: v })}
@@ -364,11 +364,11 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
                 onChange={(v) => form.updateInfo({ location: v })}
                 placeholder="Project location"
               />
-              <PillGroup
-                label="Inspection Result"
-                options={RESULT_OPTIONS}
-                value={form.info.inspectionResult}
-                onChange={(v) => form.updateInfo({ inspectionResult: v })}
+              <DateField
+                label="Date Re-Inspected"
+                mode="date"
+                value={form.info.dateReinspected}
+                onChange={(v) => form.updateInfo({ dateReinspected: v })}
               />
             </View>
           </View>
@@ -408,7 +408,7 @@ export default function InspectionFormScreen({ route, navigation }: Props) {
             </View>
             <View style={styles.photoGrid}>
               {form.photos.map((p) => {
-                const uri = p.file_path;
+                const uri = resolvePhotoUri(p.file_path);
                 return (
                   <View key={p.id} style={styles.photoCell}>
                     <Image source={uri ? { uri } : undefined} style={styles.photo} resizeMode="cover" />

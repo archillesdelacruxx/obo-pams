@@ -10,4 +10,5 @@ export type InspectionsStackParamList = {
   InspectionsList: undefined;
   InspectionForm: { id?: number };
   InspectionDetail: { id: number };
+  SitePhotos: undefined;
 };

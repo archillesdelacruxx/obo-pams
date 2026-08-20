@@ -4,39 +4,40 @@ require_once __DIR__ . '/../config/encryption.php';
 define('API_MODE', true);
 startSession();
 
-/* Mobile app (React Native) support: authenticate via Bearer token when no session cookie is present. */
-if (empty($_SESSION['user_id'])) {
-    $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    if ($authHeader === '' && function_exists('getallheaders')) {
-        foreach (getallheaders() as $hName => $hValue) {
-            if (strtolower((string)$hName) === 'authorization') {
-                $authHeader = (string)$hValue;
-                break;
-            }
+/* Mobile app (React Native) support: authenticate via Bearer token.
+   Always check for a Bearer token — even when a PHP session cookie is
+   present — so that `api_token_auth` is set and the CSRF gate is skipped
+   for mobile clients. */
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+if ($authHeader === '' && function_exists('getallheaders')) {
+    foreach (getallheaders() as $hName => $hValue) {
+        if (strtolower((string)$hName) === 'authorization') {
+            $authHeader = (string)$hValue;
+            break;
         }
     }
-    if (preg_match('/Bearer\s+(.+)/i', $authHeader, $m)) {
-        $token = trim($m[1]);
-        $pdo = getDB();
-        $tStmt = $pdo->prepare('SELECT * FROM api_tokens WHERE token = ? AND expires_at > NOW() LIMIT 1');
-        $tStmt->execute([$token]);
-        $tokenRow = $tStmt->fetch();
-        if ($tokenRow) {
-            $uStmt = $pdo->prepare('SELECT id, full_name, username, email, profile_photo, is_active, is_admin, role FROM users WHERE id = ? LIMIT 1');
-            $uStmt->execute([$tokenRow['user_id']]);
-            $user = $uStmt->fetch();
-            if ($user && $user['is_active']) {
-                $_SESSION['user_id'] = (int)$user['id'];
-                $_SESSION['full_name'] = $user['full_name'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
-                $_SESSION['profile_pic'] = $user['profile_photo'];
-                $_SESSION['is_admin'] = (bool)$user['is_admin'];
-                $_SESSION['role'] = $user['role'] ?? 'inspector';
-                $_SESSION['logged_in_at'] = time();
-                $_SESSION['api_token_auth'] = true;
-                $pdo->prepare('UPDATE api_tokens SET last_used_at = NOW() WHERE id = ?')->execute([$tokenRow['id']]);
-            }
+}
+if (preg_match('/Bearer\s+(.+)/i', $authHeader, $m)) {
+    $token = trim($m[1]);
+    $pdo = getDB();
+    $tStmt = $pdo->prepare('SELECT * FROM api_tokens WHERE token = ? AND expires_at > NOW() LIMIT 1');
+    $tStmt->execute([$token]);
+    $tokenRow = $tStmt->fetch();
+    if ($tokenRow) {
+        $uStmt = $pdo->prepare('SELECT id, full_name, username, email, profile_photo, is_active, is_admin, role FROM users WHERE id = ? LIMIT 1');
+        $uStmt->execute([$tokenRow['user_id']]);
+        $user = $uStmt->fetch();
+        if ($user && $user['is_active']) {
+            $_SESSION['user_id'] = (int)$user['id'];
+            $_SESSION['full_name'] = $user['full_name'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['email'] = $user['email'];
+            $_SESSION['profile_pic'] = $user['profile_photo'];
+            $_SESSION['is_admin'] = (bool)$user['is_admin'];
+            $_SESSION['role'] = $user['role'] ?? 'inspector';
+            $_SESSION['logged_in_at'] = time();
+            $_SESSION['api_token_auth'] = true;
+            $pdo->prepare('UPDATE api_tokens SET last_used_at = NOW() WHERE id = ?')->execute([$tokenRow['id']]);
         }
     }
 }
@@ -61,7 +62,7 @@ $readOnlyRoutes = [
     'releasing/list',
     'inspection/schedules/list',
     'inspection/template', 'inspection/checklist/get',
-    'inspection/sync/pull', 'inspection/ai-status',
+    'inspection/sync/pull', 'inspection/sync/pull-records', 'inspection/ai-status',
     'inspection/stats', 'inspection/history/list', 'inspection/reports/list',
     'notifications/list', 'notifications/unread-count',
     'me/permissions',
@@ -765,6 +766,23 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $results = is_array($data['results'] ?? null) ? $data['results'] : [];
             $teamLeader1 = !empty($data['team_leader_1']) ? (int)$data['team_leader_1'] : null;
             $teamLeader2 = !empty($data['team_leader_2']) ? (int)$data['team_leader_2'] : null;
+            $dateReinspected = ($data['date_reinspected'] ?? '') !== '' ? $data['date_reinspected'] : null;
+
+            if ($scheduleId !== null) {
+                $schCheck = $pdo->prepare('SELECT id FROM inspection_schedules WHERE id = ? LIMIT 1');
+                $schCheck->execute([$scheduleId]);
+                if (!$schCheck->fetchColumn()) $scheduleId = null;
+            }
+            if ($teamLeader1 !== null) {
+                $tl1Check = $pdo->prepare('SELECT id FROM team_leaders WHERE id = ? LIMIT 1');
+                $tl1Check->execute([$teamLeader1]);
+                if (!$tl1Check->fetchColumn()) $teamLeader1 = null;
+            }
+            if ($teamLeader2 !== null) {
+                $tl2Check = $pdo->prepare('SELECT id FROM team_leaders WHERE id = ? LIMIT 1');
+                $tl2Check->execute([$teamLeader2]);
+                if (!$tl2Check->fetchColumn()) $teamLeader2 = null;
+            }
 
             if (!$projectTitle || !$inspectionDate) {
                 jsonResponse(['error' => 'Project Title and Inspection Date are required.'], 422);
@@ -794,15 +812,15 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             if ($action === 'checklist/create') {
                 $inspectionNo = nextInspectionNo($pdo);
                 if (!$applicationNo) $applicationNo = 'APP-' . $inspectionNo;
-                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, team_leader_1, team_leader_2, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $teamLeader1, $teamLeader2, $_SESSION['user_id']]);
+                $pdo->prepare('INSERT INTO inspection_records (inspection_no, schedule_id, application_no, permit_no, permit_date_issued, project_title, project_location, owner_representative, contact_number, project_contractor, project_engineer, inspection_team, inspection_date, inspection_type, inspection_result, time_started, time_finished, physical_accomplishment, mech_accomplishment, extra_fields, overall_findings, recommendations, completion_percentage, status, inspector_id, team_leader_1, team_leader_2, date_reinspected, encoded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                    ->execute([$inspectionNo, $scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, 'Draft', $_SESSION['user_id'], $teamLeader1, $teamLeader2, $dateReinspected, $_SESSION['user_id']]);
                 $id = (int)$pdo->lastInsertId();
                 logActivity($_SESSION['user_id'], 'inspection_checklist_created', "Created inspection $inspectionNo ($projectTitle)");
             } else {
                 $inspectionNo = $existing['inspection_no'];
                 if (!$applicationNo) $applicationNo = $existing['application_no'];
-                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, team_leader_1=?, team_leader_2=? WHERE id=?')
-                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $teamLeader1, $teamLeader2, $id]);
+                $pdo->prepare('UPDATE inspection_records SET schedule_id=?, application_no=?, permit_no=?, permit_date_issued=?, project_title=?, project_location=?, owner_representative=?, contact_number=?, project_contractor=?, project_engineer=?, inspection_team=?, inspection_date=?, inspection_type=?, inspection_result=?, time_started=?, time_finished=?, physical_accomplishment=?, mech_accomplishment=?, extra_fields=?, overall_findings=?, recommendations=?, completion_percentage=?, team_leader_1=?, team_leader_2=?, date_reinspected=? WHERE id=?')
+                    ->execute([$scheduleId, $applicationNo, $permitNo, $permitDateIssued, $projectTitle, $projectLocation, $ownerRepresentative, $contactNumber, $projectContractor, $projectEngineer, $inspectionTeam, $inspectionDate, $inspectionType, $inspectionResult, $timeStarted, $timeFinished, $physicalAccomplishment, $mechAccomplishment, $extraFields, $overallFindings, $recommendations, $completionPercentage, $teamLeader1, $teamLeader2, $dateReinspected, $id]);
                 logActivity($_SESSION['user_id'], 'inspection_checklist_updated', "Updated inspection ID $id");
             }
 
@@ -1054,6 +1072,43 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
             $pullStmt->execute($params);
             jsonResponse(['success' => true, 'data' => $pullStmt->fetchAll()]);
 
+        case 'inspection/sync/pull-records':
+            /* Full restore of the caller's inspection records back to the
+               mobile app after a reinstall. Returns every record owned by
+               the current user, including results and photo paths. */
+            requirePermission('inspection-checklist');
+            $recSql = "SELECT r.*, u.full_name AS inspector_name,
+                              rev.full_name AS reviewed_by_name, rev.position AS reviewed_by_position,
+                              app.full_name AS approved_by_name, app.position AS approved_by_position,
+                              tl1.full_name AS team_leader_1_name, tl1.position AS team_leader_1_position,
+                              tl2.full_name AS team_leader_2_name, tl2.position AS team_leader_2_position
+                       FROM inspection_records r
+                       LEFT JOIN users u ON u.id = r.inspector_id
+                       LEFT JOIN users rev ON rev.id = r.reviewed_by
+                       LEFT JOIN users app ON app.id = r.approved_by
+                       LEFT JOIN team_leaders tl1 ON tl1.id = r.team_leader_1
+                       LEFT JOIN team_leaders tl2 ON tl2.id = r.team_leader_2
+                       WHERE r.inspector_id = ?
+                       ORDER BY r.inspection_date DESC, r.created_at DESC";
+            $recStmt = $pdo->prepare($recSql);
+            $recStmt->execute([$_SESSION['user_id']]);
+            $records = $recStmt->fetchAll();
+            foreach ($records as &$record) {
+                if ($record['extra_fields']) {
+                    $record['extra_fields'] = json_decode($record['extra_fields'], true) ?: [];
+                } else {
+                    $record['extra_fields'] = [];
+                }
+                $resStmt = $pdo->prepare('SELECT template_item_id, category, item_text, item_type, result, remarks FROM inspection_results WHERE inspection_id = ?');
+                $resStmt->execute([$record['id']]);
+                $record['results'] = $resStmt->fetchAll();
+                $photoStmt = $pdo->prepare('SELECT id, file_path, caption FROM inspection_photos WHERE inspection_id = ? ORDER BY id');
+                $photoStmt->execute([$record['id']]);
+                $record['photos'] = $photoStmt->fetchAll();
+            }
+            unset($record);
+            jsonResponse(['success' => true, 'data' => $records]);
+
         case 'inspection/stats':
             if (!hasPermission('inspection-checklist') && !hasPermission('inspection-history')) {
                 jsonResponse(['error' => 'Forbidden.'], 403);
@@ -1132,7 +1187,22 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 LIMIT 100
             ");
             $stmt->execute($params);
-            jsonResponse(['success' => true, 'data' => $stmt->fetchAll()]);
+            $rows = $stmt->fetchAll();
+            if ($rows) {
+                $ids = array_column($rows, 'id');
+                $placeholders = implode(',', array_fill(0, count($ids), '?'));
+                $pStmt = $pdo->prepare("SELECT inspection_id, id AS photo_id, file_path FROM inspection_photos WHERE inspection_id IN ($placeholders) ORDER BY id");
+                $pStmt->execute($ids);
+                $photosByRecord = [];
+                while ($pr = $pStmt->fetch()) {
+                    $photosByRecord[$pr['inspection_id']][] = ['photo_id' => $pr['photo_id'], 'file_path' => $pr['file_path']];
+                }
+                foreach ($rows as &$row) {
+                    $row['photos'] = $photosByRecord[$row['id']] ?? [];
+                    $row['photo_count'] = count($row['photos']);
+                }
+            }
+            jsonResponse(['success' => true, 'data' => $rows ?? []]);
 
         /* =====================================================================
            NOTIFICATIONS  (table: notifications)
@@ -1176,6 +1246,14 @@ logActivity($_SESSION['user_id'], 'workflow_round_added', "Added round $nextRoun
                 $stmt = $pdo->prepare('SELECT module_key FROM user_permissions WHERE user_id = ? AND is_granted = 1');
                 $stmt->execute([$_SESSION['user_id']]);
                 $granted = array_values(array_unique(array_merge($alwaysVisible, $stmt->fetchAll(PDO::FETCH_COLUMN))));
+                /* Role-based grants that are not in user_permissions table */
+                if (in_array($role, ['developer', 'admin', 'admin_aid', 'inspector-admin'], true)) {
+                    $granted[] = 'user-management';
+                }
+                if ($role === 'inspector-admin') {
+                    $granted[] = 'activity-logs';
+                }
+                $granted = array_values(array_unique($granted));
             }
             jsonResponse(['success' => true, 'granted' => array_values(array_unique($granted))]);
 

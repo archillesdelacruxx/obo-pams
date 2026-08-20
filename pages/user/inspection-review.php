@@ -24,7 +24,7 @@ $canReview = !empty($perms['inspection-edit']);
   <link rel="stylesheet" href="../../assets/css/modal.css">
   <link rel="stylesheet" href="../../assets/css/tables.css">
   <link rel="stylesheet" href="../../assets/css/responsive.css">
-  <link rel="stylesheet" href="../../assets/css/user.css?v=20260817d">
+  <link rel="stylesheet" href="../../assets/css/user.css?v=20260820e">
 </head>
 <body data-page="inspection-review" data-is-admin="<?php echo empty($_SESSION['is_admin']) ? '0' : '1'; ?>" data-permissions='<?php echo json_encode(array_keys(array_filter($perms))); ?>'>
   <div class="app-shell" id="appShell">
@@ -45,7 +45,7 @@ $canReview = !empty($perms['inspection-edit']);
           </div>
           <div class="scroll-x">
             <table class="data-table">
-              <thead><tr><th>Inspection No.</th><th>Application No.</th><th>Project Title</th><th>Inspection Date</th><th>Inspecting Team</th><th>Inspector</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Inspection No.</th><th>Application No.</th><th>Project Title</th><th>Inspection Date</th><th>Inspecting Team</th><th>Inspector</th><th>Site Photos</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody id="insrqTbody"></tbody>
             </table>
           </div>

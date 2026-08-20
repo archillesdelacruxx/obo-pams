@@ -10,3 +10,4 @@ config/app.local.php
 
 # Internal QA artifacts
 QA_AUDIT_REPORT.txt
+PAMS.apk

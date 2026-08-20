@@ -36,12 +36,11 @@ export interface ProjectInfo {
   physical: string;
   owner: string;
   contact: string;
-  contractor: string;
   engineer: string;
   location: string;
   timeStarted: string | null;
   timeFinished: string | null;
-  inspectionResult: string;
+  dateReinspected: string | null;
   overallFindings: string;
   recommendations: string;
 }
@@ -59,12 +58,11 @@ export const EMPTY_INFO: ProjectInfo = {
   physical: '',
   owner: '',
   contact: '',
-  contractor: '',
   engineer: '',
   location: '',
   timeStarted: null,
   timeFinished: null,
-  inspectionResult: '',
+  dateReinspected: null,
   overallFindings: '',
   recommendations: '',
 };
@@ -93,12 +91,11 @@ function hydrateInfo(detail: InspectionRecordDetail): ProjectInfo {
     physical: detail.physical_accomplishment != null ? String(detail.physical_accomplishment) : '',
     owner: detail.owner_representative ?? '',
     contact: detail.contact_number ?? '',
-    contractor: detail.project_contractor ?? '',
     engineer: detail.project_engineer ?? '',
     location: detail.project_location ?? '',
     timeStarted: detail.time_started,
     timeFinished: detail.time_finished,
-    inspectionResult: detail.inspection_result ?? '',
+    dateReinspected: detail.date_reinspected ?? null,
     overallFindings: detail.overall_findings ?? '',
     recommendations: detail.recommendations ?? '',
   };
@@ -137,7 +134,8 @@ export interface UseInspectionForm {
 }
 
 export default function useInspectionForm(id?: number): UseInspectionForm {
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
+  const canEditAll = permissions.includes('inspection-edit');
   const [loading, setLoading] = useState(id != null);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -156,7 +154,7 @@ export default function useInspectionForm(id?: number): UseInspectionForm {
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<InspectionPhoto[]>([]);
 
-  const editable = status === 'Draft' || status === 'Rejected';
+  const editable = canEditAll || status === 'Draft' || status === 'Rejected';
   const canSubmit = status === 'Draft' || status === 'Rejected';
 
   useEffect(() => {
@@ -253,16 +251,15 @@ export default function useInspectionForm(id?: number): UseInspectionForm {
       project_location: info.location,
       owner_representative: info.owner,
       contact_number: info.contact,
-      project_contractor: info.contractor,
       project_engineer: info.engineer,
       inspection_date: info.inspectionDate || todayStr(),
       inspection_type: inspectionType,
-      inspection_result: info.inspectionResult,
       time_started: info.timeStarted,
       time_finished: info.timeFinished,
       physical_accomplishment: info.physical !== '' ? Number(info.physical) : null,
       team_leader_1: info.teamLeader1,
       team_leader_2: info.teamLeader2,
+      date_reinspected: info.dateReinspected,
       overall_findings: info.overallFindings,
       recommendations: info.recommendations,
       completion_percentage: completion,
@@ -301,7 +298,7 @@ export default function useInspectionForm(id?: number): UseInspectionForm {
   const submit = useCallback(async (): Promise<boolean> => {
     setSubmitting(true);
     try {
-      const targetId = recordId ?? (await saveAll());
+      const targetId = await saveAll();
       await repoSubmitRecord(targetId);
       setStatus('Under Review');
       scheduleSync();
@@ -309,7 +306,7 @@ export default function useInspectionForm(id?: number): UseInspectionForm {
     } finally {
       setSubmitting(false);
     }
-  }, [recordId, saveAll]);
+  }, [saveAll]);
 
   const aiFor = useCallback(
     async (category: string) => {
@@ -332,7 +329,9 @@ export default function useInspectionForm(id?: number): UseInspectionForm {
   const addPhoto = useCallback(
     async (asset: { uri: string; fileName?: string | null; mimeType?: string | null }) => {
       const targetId = recordId ?? (await saveAll());
+      console.log('[useInspectionForm] addPhoto targetId=', targetId, 'recordId=', recordId);
       const photo = await repoAddPhoto(targetId, asset);
+      console.log('[useInspectionForm] addPhoto saved photo.id=', photo.id, 'file_path=', photo.file_path);
       setPhotos((prev) => [...prev, photo]);
     },
     [recordId, saveAll],

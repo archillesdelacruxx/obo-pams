@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
@@ -17,10 +17,20 @@ const navTheme = {
   },
 };
 
+const SPLASH_MIN_MS = 5000;
+
 export default function RootNavigator() {
   const { status } = useAuth();
+  const mountedAt = useRef(Date.now());
+  const [minSplashElapsed, setMinSplashElapsed] = useState(false);
 
-  if (status === 'loading') return <SplashScreen />;
+  useEffect(() => {
+    const remaining = SPLASH_MIN_MS - (Date.now() - mountedAt.current);
+    const t = setTimeout(() => setMinSplashElapsed(true), Math.max(remaining, 0));
+    return () => clearTimeout(t);
+  }, []);
+
+  if (status === 'loading' || !minSplashElapsed) return <SplashScreen />;
 
   return (
     <NavigationContainer theme={navTheme}>

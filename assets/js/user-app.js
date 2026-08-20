@@ -1903,9 +1903,11 @@ function renderReportDoc(rec) {
       </div>
 
       <div class="mr-title-box">
-        <div class="mr-title">Monitoring On-Site Occular Inspection Checklist</div>
-        <div class="mr-inspection-checks">
-          <span class="mr-insp-display">${escapeHtml(inspDisplay)}</span>
+        <div class="mr-title-row">
+          <div class="mr-title">Monitoring On-Site Occular Inspection Checklist</div>
+          <div class="mr-inspection-checks">
+            <span class="mr-insp-display">${escapeHtml(inspDisplay)}</span>
+          </div>
         </div>
       </div>
 
@@ -1951,6 +1953,48 @@ function renderReportDoc(rec) {
         </table>
       </div>
 
+      <div class="mr-sig-block">
+        <div class="mr-sig-title">INSPECTED BY:</div>
+        <table class="mr-sig-table">
+          <tbody>
+            <tr class="mr-sig-space">
+              <td></td>
+              <td></td>
+            </tr>
+            <tr class="mr-sig-info">
+              <td>
+                <div class="mr-sig-position">Position</div>
+                <div class="mr-sig-team">Team 1</div>
+              </td>
+              <td>
+                <div class="mr-sig-position">Position</div>
+                <div class="mr-sig-team">Team 2</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mr-sig-block">
+        <div class="mr-sig-title">REVIEW BY:</div>
+        <table class="mr-sig-table">
+          <tbody>
+            <tr class="mr-sig-space">
+              <td></td>
+              <td></td>
+            </tr>
+            <tr class="mr-sig-info">
+              <td>
+                <div class="mr-sig-position">Position</div>
+              </td>
+              <td>
+                <div class="mr-sig-position">Position</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
     </div>
   `;
 }
@@ -1973,6 +2017,43 @@ async function initInspectionChecklistPage() {
   const resultsBody = $('#inschResultsBody');
 
   const canEdit = () => getPermSet().has('inspection-edit');
+
+  /* ---- 12-hour time picker helpers ---- */
+  function syncTimeSelects(hiddenId) {
+    const hidden = $(hiddenId);
+    if (!hidden) return;
+    const val = hidden.value || '';
+    const row = hidden.closest('.time-picker-row');
+    if (!row) return;
+    if (val) {
+      const match = val.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (match) {
+        row.querySelector('[data-unit="h"]').value = match[1];
+        row.querySelector('[data-unit="m"]').value = match[2];
+        row.querySelector('[data-unit="ap"]').value = match[3].toUpperCase();
+      }
+    }
+  }
+  function readTimeSelect(hiddenId) {
+    const row = $(hiddenId)?.closest('.time-picker-row');
+    if (!row) return null;
+    const h = row.querySelector('[data-unit="h"]').value;
+    const m = row.querySelector('[data-unit="m"]').value;
+    const ap = row.querySelector('[data-unit="ap"]').value;
+    if (!h || !m || !ap) return null;
+    return h + ':' + m + ' ' + ap;
+  }
+
+  /* Wire up time select change listeners */
+  document.querySelectorAll('.time-picker-row').forEach(row => {
+    const hiddenInput = row.querySelector('input[type="hidden"]');
+    if (!hiddenInput) return;
+    row.querySelectorAll('.time-sel').forEach(sel => {
+      sel.addEventListener('change', () => {
+        hiddenInput.value = readTimeSelect(hiddenInput.id) || '';
+      });
+    });
+  });
 
   async function loadTeamLeaderOptions() {
     const res = await apiGet('teamleaders', 'roster').catch(() => null);
@@ -2064,13 +2145,17 @@ async function initInspectionChecklistPage() {
 
       rows += items.map(it => {
         const prev = byTpl[it.id] || {};
+        const cur = prev.result || 'N/A';
         const isOthers = String(it.item_text) === 'Others';
         const othersInput = isOthers
           ? `<input type="text" class="form-control form-control-sm others-line" data-others placeholder="Specify" value="${escapeHtml(xf.others || '')}">`
           : '';
+        const radios = ['Pass','Fail','N/A'].map(v =>
+          `<label class="radio-pill${cur === v ? ' active' : ''}"><input type="radio" name="result_${it.id}" data-cb="${it.id}" value="${v}"${cur === v ? ' checked' : ''}>${v}</label>`
+        ).join('');
         return `<tr data-tpl="${it.id}" data-cat="${escapeHtml(cat)}" data-item="${escapeHtml(it.item_text)}" data-type="checkbox">
           <td>${escapeHtml(it.item_text)}${othersInput}</td>
-          <td class="col-result col-check"><input type="checkbox" data-cb="${it.id}" ${(prev.result || 'N/A') === 'Pass' ? 'checked' : ''}></td>
+          <td class="col-result col-check"><div class="radio-pill-group">${radios}</div></td>
           <td class="col-remarks"></td>
         </tr>`;
       }).join('');
@@ -2096,13 +2181,13 @@ async function initInspectionChecklistPage() {
   function collectResults() {
     const arr = [];
     resultsBody.querySelectorAll('tr[data-tpl]').forEach(tr => {
-      const cb = tr.querySelector('input[data-cb]');
+      const checked = tr.querySelector('input[data-cb]:checked');
       arr.push({
         template_item_id: parseInt(tr.dataset.tpl, 10),
         category: tr.dataset.cat,
         item_text: tr.dataset.item,
         item_type: 'checkbox',
-        result: cb && cb.checked ? 'Pass' : 'N/A',
+        result: checked ? checked.value : 'N/A',
         remarks: ''
       });
     });
@@ -2152,7 +2237,6 @@ async function initInspectionChecklistPage() {
     set('#inschLocation', rec.project_location);
     set('#inschOwner', rec.owner_representative);
     set('#inschContact', rec.contact_number);
-    set('#inschContractor', rec.project_contractor);
     set('#inschEngineer', rec.project_engineer);
     set('#inschTeamLeader1', rec.team_leader_1 || '');
     set('#inschTeamLeader2', rec.team_leader_2 || '');
@@ -2161,10 +2245,8 @@ async function initInspectionChecklistPage() {
     setInspCountUI(inspType);
     set('#inschTimeStart', rec.time_started);
     set('#inschTimeEnd', rec.time_finished);
-    const resRadio = $('input[name="inschResult"]');
-    if (resRadio) {
-      resRadio.checked = resRadio.value === (rec.inspection_result || '');
-    }
+    syncTimeSelects('inschTimeStart');
+    syncTimeSelects('inschTimeEnd');
     set('#inschPhysical', rec.physical_accomplishment != null ? rec.physical_accomplishment : '');
     set('#inschFindings', rec.overall_findings);
     set('#inschRecommendations', rec.recommendations);
@@ -2215,6 +2297,13 @@ async function initInspectionChecklistPage() {
       resultsBody.querySelectorAll('.cat-ai-btn').forEach(btn => { btn.style.display = aiOn ? '' : 'none'; });
       if (!aiOn) return;
       resultsBody.addEventListener('click', async (e) => {
+        const pill = e.target.closest('.radio-pill');
+        if (pill) {
+          pill.closest('.radio-pill-group').querySelectorAll('.radio-pill').forEach(p => p.classList.remove('active'));
+          pill.classList.add('active');
+          updateSummary();
+          return;
+        }
         const btn = e.target.closest('.cat-ai-btn');
         if (!btn) return;
         const cat = btn.dataset.aiCat;
@@ -2229,8 +2318,8 @@ async function initInspectionChecklistPage() {
     const items = [];
     resultsBody.querySelectorAll(`tr[data-cat="${CSS.escape(cat)}"]`).forEach(tr => {
       const text = tr.dataset.item || '';
-      const cb = tr.querySelector('input[data-cb]');
-      items.push({ item_text: text, result: cb && cb.checked ? 'Pass' : 'N/A' });
+      const cb = tr.querySelector('input[data-cb]:checked');
+      items.push({ item_text: text, result: cb ? cb.value : 'N/A' });
     });
     if (!items.length) { showToast({ title: 'Nothing to summarize', message: 'Check at least one item in this category.', type: 'warning' }); return; }
     const orig = btn.innerHTML;
@@ -2293,7 +2382,6 @@ async function initInspectionChecklistPage() {
       return;
     }
     const mechEl = resultsBody.querySelector('input[data-cat-pct="Mechanical Works"]');
-    const resRadioChecked = $('input[name="inschResult"]:checked');
     const payload = {
       application_no: ($('#inschAppNo')?.value || '').trim(),
       permit_no: $('#inschPermitNo').value.trim() || null,
@@ -2302,15 +2390,13 @@ async function initInspectionChecklistPage() {
       project_location: $('#inschLocation').value.trim() || null,
       owner_representative: $('#inschOwner').value.trim() || null,
       contact_number: $('#inschContact').value.trim() || null,
-      project_contractor: $('#inschContractor').value.trim() || null,
       project_engineer: $('#inschEngineer').value.trim() || null,
       team_leader_1: $('#inschTeamLeader1').value || null,
       team_leader_2: $('#inschTeamLeader2').value || null,
       inspection_date: date,
       inspection_type: collectInspType(),
-      inspection_result: resRadioChecked ? resRadioChecked.value : null,
-      time_started: $('#inschTimeStart').value || null,
-      time_finished: $('#inschTimeEnd').value || null,
+      time_started: readTimeSelect('inschTimeStart'),
+      time_finished: readTimeSelect('inschTimeEnd'),
       physical_accomplishment: $('#inschPhysical').value || null,
       mech_accomplishment: (mechEl && mechEl.value !== '') ? mechEl.value : null,
       extra_fields: collectExtraFields(),
@@ -2532,6 +2618,7 @@ async function initInspectionReviewPage() {
   const approveBtn = $('#insrqApproveBtn');
   const rejectBtn = $('#insrqRejectBtn');
   let currentId = null;
+  let currentRows = [];
 
   async function loadQueue() {
     const res = await apiGet('inspection', 'reports/list', { status }).catch(() => ({ data: [] }));
@@ -2544,6 +2631,7 @@ async function initInspectionReviewPage() {
             .some(v => v && String(v).toLowerCase().includes(q)),
         )
       : rows;
+    currentRows = filtered;
     const t = $('#insrqTitle');
     if (t) t.textContent = `${status} Queue (${filtered.length})`;
     tbody.innerHTML = filtered.map(r => `
@@ -2554,6 +2642,7 @@ async function initInspectionReviewPage() {
         <td>${r.inspection_date ? formatDate(r.inspection_date) : '—'}</td>
         <td>${escapeHtml(r.team_leader_1_name || '—')}${r.team_leader_2_name ? ', ' + escapeHtml(r.team_leader_2_name) : ', <span class="text-muted">No Team 2</span>'}</td>
         <td>${escapeHtml(r.inspector_name || '—')}</td>
+        <td class="cell-photos">${r.photo_count > 0 ? r.photos.slice(0, 3).map(p => `<img src="${imgPath(p.file_path)}" class="photo-thumb-sm" onclick="viewQueuePhotos(${r.id})" title="View photos">`).join('') + (r.photo_count > 3 ? `<span class="photo-more">+${r.photo_count - 3}</span>` : '') : '<span class="text-muted">None</span>'}</td>
         <td>${statusBadge(r.status)}</td>
         <td><div class="row-actions">
           <button class="icon-btn" title="View report" onclick="viewQueueReport(${r.id})">${userIcon('eye')}</button>
@@ -2561,7 +2650,7 @@ async function initInspectionReviewPage() {
             <button class="icon-btn" title="Approve" style="color:var(--success);" onclick="openQueueReview(${r.id}, 'approve')">${userIcon('check')}</button>
             <button class="icon-btn" title="Reject" style="color:var(--danger);" onclick="openQueueReview(${r.id}, 'reject')">${userIcon('x')}</button>` : ''}
         </div></td>
-      </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--gray-400);">No ${status.toLowerCase()} inspections found.</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="9" style="text-align:center;padding:48px;color:var(--gray-400);">No ${status.toLowerCase()} inspections found.</td></tr>`;
     const count = $('#insrqCount');
     if (count) count.textContent = filtered.length;
     const pi = $('#insrqPageInfo');
@@ -2575,6 +2664,45 @@ async function initInspectionReviewPage() {
     if (body) body.innerHTML = renderReportDoc(res.data);
     bindInlineModal('#insrqReportModal');
     openInlineModal('#insrqReportModal');
+  };
+
+  window.viewQueuePhotos = async (id) => {
+    const row = currentRows.find(r => r.id === id);
+    if (!row || !row.photos || !row.photos.length) { showToast({ title: 'No photos', message: 'This inspection has no site photos.', type: 'info' }); return; }
+    let currentIdx = 0;
+    const imgs = row.photos.map(p => imgPath(p.file_path));
+    const overlay = document.createElement('div');
+    overlay.className = 'photo-viewer-overlay';
+    overlay.innerHTML = `
+      <div class="photo-viewer-box">
+        <div class="photo-viewer-head">
+          <span>${escapeHtml(row.inspection_no)} — Site Photos (${imgs.length})</span>
+          <button class="icon-btn photo-viewer-close" title="Close">✕</button>
+        </div>
+        <div class="photo-viewer-body">
+          <button class="icon-btn photo-viewer-prev" title="Previous">‹</button>
+          <img class="photo-viewer-img" src="${imgs[0]}" alt="site photo">
+          <button class="icon-btn photo-viewer-next" title="Next">›</button>
+        </div>
+        <div class="photo-viewer-foot"><span class="photo-viewer-counter">1 / ${imgs.length}</span></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const img = overlay.querySelector('.photo-viewer-img');
+    const counter = overlay.querySelector('.photo-viewer-counter');
+    function show(i) {
+      currentIdx = (i + imgs.length) % imgs.length;
+      img.src = imgs[currentIdx];
+      counter.textContent = `${currentIdx + 1} / ${imgs.length}`;
+    }
+    overlay.querySelector('.photo-viewer-close').onclick = () => overlay.remove();
+    overlay.querySelector('.photo-viewer-prev').onclick = () => show(currentIdx - 1);
+    overlay.querySelector('.photo-viewer-next').onclick = () => show(currentIdx + 1);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.addEventListener('keydown', function esc(e) {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); }
+      if (e.key === 'ArrowLeft') show(currentIdx - 1);
+      if (e.key === 'ArrowRight') show(currentIdx + 1);
+    });
   };
 
   window.openQueueReview = (id, mode) => {
@@ -2620,6 +2748,7 @@ async function initInspectionReviewPage() {
   });
 
   await loadQueue();
+  PAMS_REALTIME.register('insrq-table', loadQueue, 12000);
 }
 
 /* --------------------------------------------------------------------------
@@ -2648,8 +2777,8 @@ async function initTeamLeadersPage() {
     }
     tbody.innerHTML = TEAM_LEADERS.map(l => {
       const teamBadge = String(l.team_no) === '2'
-        ? '<span class="badge badge-info">Team 2</span>'
-        : '<span class="badge badge-success">Team 1</span>';
+        ? '<span class="badge badge-info">Team B</span>'
+        : '<span class="badge badge-success">Team A</span>';
       const activeBadge = l.is_active == 1
         ? '<span class="badge badge-success">Active</span>'
         : '<span class="badge badge-neutral">Inactive</span>';

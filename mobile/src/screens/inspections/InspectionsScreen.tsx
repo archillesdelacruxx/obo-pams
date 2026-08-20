@@ -14,11 +14,13 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts } from '../../theme/tokens';
 import MonitoringTable from '../../components/MonitoringTable';
 import StatusPill from '../../components/StatusPill';
 import { deleteRecord, listRecords } from '../../db/inspectionRepo';
 import { pendingCount, lastSyncedAt, runSync, subscribeSync } from '../../db/sync';
+import { useAuth } from '../../context/AuthContext';
 import type { InspectionReportRow } from '../../types';
 import type { InspectionsStackParamList } from '../../navigation/types';
 
@@ -33,6 +35,9 @@ const FILTERS: { key: string; label: string; status?: string }[] = [
 
 export default function InspectionsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<InspectionsStackParamList, 'InspectionsList'>>();
+  const { permissions } = useAuth();
+  const canEditAll = permissions.includes('inspection-edit');
+  const canDelete = permissions.includes('inspection-delete');
   const [records, setRecords] = useState<InspectionReportRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,6 +145,11 @@ export default function InspectionsScreen() {
 
   const closeModal = useCallback(() => setSelected(null), []);
 
+  const canEditRow = useCallback(
+    (row: InspectionReportRow) => canEditAll || row.status === 'Draft' || row.status === 'Rejected',
+    [canEditAll],
+  );
+
   const confirmDelete = useCallback(
     (row: InspectionReportRow) => {
       Alert.alert('Delete inspection', `Delete "${row.project_title}"? This cannot be undone.`, [
@@ -164,7 +174,10 @@ export default function InspectionsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
+      <LinearGradient
+        colors={[colors.navy900, colors.navy700]}
+        style={styles.header}
+      >
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Inspections</Text>
@@ -221,7 +234,7 @@ export default function InspectionsScreen() {
             );
           })}
         </ScrollView>
-      </View>
+      </LinearGradient>
 
       {pending > 0 || syncing || lastSynced ? (
         <Pressable
@@ -279,17 +292,19 @@ export default function InspectionsScreen() {
               </View>
             ) : null}
             <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalBtn, styles.modalBtnPrimary]}
-                onPress={() => {
-                  const id = selected?.id;
-                  closeModal();
-                  if (id != null) navigation.navigate('InspectionForm', { id });
-                }}
-              >
-                <Ionicons name="create-outline" size={18} color={colors.white} />
-                <Text style={styles.modalBtnPrimaryText}>Edit</Text>
-              </Pressable>
+              {selected && canEditRow(selected) ? (
+                <Pressable
+                  style={[styles.modalBtn, styles.modalBtnPrimary]}
+                  onPress={() => {
+                    const id = selected?.id;
+                    closeModal();
+                    if (id != null) navigation.navigate('InspectionForm', { id });
+                  }}
+                >
+                  <Ionicons name="create-outline" size={18} color={colors.white} />
+                  <Text style={styles.modalBtnPrimaryText}>Edit</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnOutline]}
                 onPress={() => {
@@ -301,7 +316,7 @@ export default function InspectionsScreen() {
                 <Ionicons name="eye-outline" size={18} color={colors.primary} />
                 <Text style={styles.modalBtnOutlineText}>View</Text>
               </Pressable>
-              {selected ? (
+              {selected && canDelete ? (
                 <Pressable style={[styles.modalBtn, styles.modalBtnDanger]} onPress={() => confirmDelete(selected)}>
                   <Ionicons name="trash-outline" size={18} color={colors.white} />
                   <Text style={styles.modalBtnPrimaryText}>Delete</Text>
@@ -326,6 +341,13 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.navy900,
     paddingBottom: 8,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
+    shadowColor: colors.navy900,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
   headerRow: {
     flexDirection: 'row',
@@ -394,19 +416,21 @@ const styles = StyleSheet.create({
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.white,
     borderRadius: 12,
     paddingHorizontal: 12,
     marginTop: 14,
     marginHorizontal: 20,
     gap: 8,
+    borderWidth: 1,
+    borderColor: colors.navy900,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 10,
     fontFamily: fonts.body,
     fontSize: 13.5,
-    color: colors.white,
+    color: colors.gray800,
   },
   chips: {
     paddingHorizontal: 20,

@@ -1,11 +1,11 @@
 import { apiFetch } from './client';
-import { API_BASE_URL } from '../config';
+import { getApiBaseUrl } from '../config';
 import type { AiRemarkResponse, AiStatusResponse } from '../types';
 
 export function photoUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http') || path.startsWith('file://') || path.startsWith('content://')) return path;
-  return `${API_BASE_URL}/${path}`;
+  return `${getApiBaseUrl()}/${path}`;
 }
 
 export const apiGetAiStatus = () =>
